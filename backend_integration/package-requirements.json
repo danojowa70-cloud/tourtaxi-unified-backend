@@ -1,0 +1,22 @@
+{
+  "name": "tourtaxi-backend-integration",
+  "version": "1.0.0",
+  "description": "Driver status logging integration for TourTaxi backend",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "socket.io": "^4.7.4",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "scripts": {
+    "start": "node server-integration.js",
+    "dev": "nodemon server-integration.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

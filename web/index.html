@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="Tour Taxi Driver App" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="tour_taxi_driver" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+
+    <title>tour_taxi_driver</title>
+
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+
+    <!-- Load Google Maps JavaScript API for web builds BEFORE Flutter initializes -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBRYPKaXlRhpzoAmM5-KrS2JaNDxAX_phw"></script>
+
+    <!-- Flutter bootstrap -->
+    <script defer src="flutter.js" ></script>
+    <style>
+      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
+      #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color: #333; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Loading…</div>
+    <script>
+      window.addEventListener('load', function() {
+        if (!window._flutter) {
+          console.error('Flutter loader not found.');
+          return;
+        }
+        window._flutter.loader.loadEntrypoint({}).then(function(engineInitializer) {
+          return engineInitializer.initializeEngine();
+        }).then(function(appRunner) {
+          document.getElementById('loading')?.remove();
+          return appRunner.runApp();
+        });
+      });
+    </script>
+  </body>
+  </html>
+
+
