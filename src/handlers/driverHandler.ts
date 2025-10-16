@@ -883,7 +883,7 @@ export function registerDriverHandlers(
   // DRIVER STATUS MANAGEMENT
   // ========================================
   
-  socket.on('driver_offline', (data) => {
+  socket.on('driver_offline', async (data) => {
     try {
       logger.info({ driver_id: data.driver_id }, 'Driver going offline');
       
