@@ -349,12 +349,16 @@ server.listen(PORT, () => {
   console.log(`🗺️  Google Maps API configured`);
   console.log('='.repeat(60));
   console.log('📋 Available endpoints:');
-  console.log('   GET  /health              - Health check');
-  console.log('   GET  /status              - System status');
-  console.log('   GET  /api/drivers         - Active drivers');
-  console.log('   GET  /api/passengers      - Active passengers');
-  console.log('   GET  /api/rides           - Pending rides');
-  console.log('   GET  /api/completed-rides - Completed rides');
+  console.log('   GET  /health                    - Health check');
+  console.log('   GET  /status                    - System status');
+  console.log('   GET  /api/drivers               - Active drivers');
+  console.log('   GET  /api/passengers            - Active passengers');
+  console.log('   GET  /api/rides                 - Pending rides');
+  console.log('   GET  /api/completed-rides       - Completed rides');
+  console.log('   GET  /api/driver/:driverId      - Get specific driver');
+  console.log('   GET  /api/passenger/:passengerId - Get specific passenger');
+  console.log('   GET  /api/ride/:rideId          - Get specific ride');
+  console.log('   GET  /api/ride-events           - Ride events (with filters)');
   console.log('='.repeat(60));
 });
 
