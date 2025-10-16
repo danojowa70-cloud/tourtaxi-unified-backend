@@ -1,13 +1,28 @@
 import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants/app_constants.dart';
+import 'firebase_options.dart';
+import 'services/fcm_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase and FCM
+  try {
+    // Set background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    
+    // Initialize FCM Service
+    await FCMService.initialize();
+    dev.log('Firebase and FCM initialized successfully', name: 'TourTaxiDriver');
+  } catch (e) {
+    dev.log('Firebase/FCM initialization failed: $e', name: 'TourTaxiDriver');
+  }
   
   // Initialize Supabase
   try {

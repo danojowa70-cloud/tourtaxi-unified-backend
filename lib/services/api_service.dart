@@ -104,4 +104,37 @@ class ApiService {
       throw Exception('Failed to update driver status: $e');
     }
   }
+  
+  /// Update driver FCM token in database
+  static Future<bool> updateDriverFCMToken({
+    required String driverId,
+    required String fcmToken,
+  }) async {
+    try {
+      final uri = Uri.parse('$_base/driver/fcm-token');
+      print('📡 API URL: $uri');
+      print('📤 Request payload: {"driver_id": "$driverId", "fcm_token": "${fcmToken.substring(0, 20)}..."}');
+      
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'driver_id': driverId,
+          'fcm_token': fcmToken,
+        }),
+      );
+      
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('❌ FCM Token API Error: $e');
+      throw Exception('Failed to update FCM token: $e');
+    }
+  }
 }

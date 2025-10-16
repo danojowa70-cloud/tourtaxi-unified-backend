@@ -208,6 +208,46 @@ app.get('/api/ride-events', async (req: express.Request, res: express.Response) 
 // Driver status update endpoint
 app.post('/driver/status', updateDriverStatus);
 
+// FCM token update endpoint
+app.post('/driver/fcm-token', async (req: express.Request, res: express.Response) => {
+  try {
+    const { driver_id, fcm_token } = req.body;
+    
+    if (!driver_id || !fcm_token) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: driver_id and fcm_token' 
+      });
+    }
+    
+    const { data, error } = await supabase
+      .from('drivers')
+      .update({
+        fcm_token: fcm_token,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', driver_id);
+    
+    if (error) {
+      logger.error({ error, driver_id }, 'Failed to update FCM token in database');
+      return res.status(400).json({ error: error.message });
+    }
+    
+    logger.info({ driver_id }, 'FCM token updated successfully');
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: {
+        driver_id,
+        updated_at: new Date().toISOString()
+      }
+    });
+    
+  } catch (err: any) {
+    logger.error({ error: err }, 'Internal server error updating FCM token');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Debug endpoint to check driver status in database
 app.get('/driver/:driverId/status', async (req: express.Request, res: express.Response) => {
   try {

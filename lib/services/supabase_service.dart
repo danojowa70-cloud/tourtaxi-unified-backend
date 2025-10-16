@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/driver_model.dart';
 import '../models/ride_model.dart';
 import 'package:tour_taxi_driver/services/api_service.dart';
+import 'package:tour_taxi_driver/services/fcm_service.dart';
 
 class SupabaseService {
   static final SupabaseClient _client = Supabase.instance.client;
@@ -69,6 +70,10 @@ class SupabaseService {
           insuranceNumber: insuranceNumber,
           insuranceExpiry: insuranceExpiry,
         );
+        
+        // Initialize FCM for new driver
+        await FCMService.subscribeDriverToNotifications(response.user!.id);
+        await FCMService.sendTokenToServer(response.user!.id);
       }
 
       return response;
@@ -82,10 +87,18 @@ class SupabaseService {
     required String password,
   }) async {
     try {
-      return await _client.auth.signInWithPassword(
+      final response = await _client.auth.signInWithPassword(
         email: email,
         password: password,
       );
+      
+      // Setup FCM for signed in driver
+      if (response.user != null) {
+        await FCMService.subscribeDriverToNotifications(response.user!.id);
+        await FCMService.sendTokenToServer(response.user!.id);
+      }
+      
+      return response;
     } catch (e) {
       throw Exception('Sign in failed: $e');
     }
@@ -93,6 +106,14 @@ class SupabaseService {
 
   static Future<void> signOut() async {
     try {
+      // Get current user ID before signing out
+      final currentUser = _client.auth.currentUser;
+      
+      // Unsubscribe from FCM notifications
+      if (currentUser != null) {
+        await FCMService.unsubscribeDriverFromNotifications(currentUser.id);
+      }
+      
       await _client.auth.signOut();
     } catch (e) {
       throw Exception('Sign out failed: $e');
