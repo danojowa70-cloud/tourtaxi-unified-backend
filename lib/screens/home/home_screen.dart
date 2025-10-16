@@ -7,6 +7,7 @@ import '../../constants/app_constants.dart';
 import '../../services/location_service.dart';
 import '../../services/socket_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/api_service.dart';
 import '../../models/driver_model.dart';
 import '../../models/ride_model.dart';
 import '../../widgets/online_toggle.dart';
@@ -197,39 +198,80 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
 
   void _toggleOnlineStatus(bool isOnline) async {
+    print('🔄 TOGGLE CLICKED: $isOnline');
+    dev.log('Toggle function called with isOnline: $isOnline', name: 'HomeScreen');
+    
+    // Check if driver is loaded
+    if (_driver == null) {
+      print('❌ ERROR: Driver is null!');
+      dev.log('Driver is null, cannot toggle status', name: 'HomeScreen');
+      return;
+    }
+    
+    print('👤 Driver ID: ${_driver!.id}');
+    print('📧 Driver Email: ${_driver!.email}');
+    
     setState(() {
       _isOnline = isOnline;
     });
 
-    if (isOnline) {
-      // Connect driver to socket
-      if (_currentLocation != null) {
-        await SocketService.connectDriver(
-          driverId: _driver!.id,
-          name: _driver!.name,
-          phone: _driver!.phone,
-          vehicleType: _driver!.vehicleType ?? 'Sedan',
-          vehicleNumber: _driver!.vehicleNumber ?? 'N/A',
-          rating: _driver!.rating ?? 4.5,
-          totalRides: _driver!.totalRides,
-          totalEarnings: _driver!.totalEarnings,
-          latitude: _currentLocation!.latitude,
-          longitude: _currentLocation!.longitude,
-        );
+    try {
+      print('🌐 Calling API to update driver status...');
+      // 1. Update status in database via REST API
+      final success = await ApiService.updateDriverStatus(
+        driverId: _driver!.id,
+        isOnline: isOnline,
+      );
+      
+      print('✅ API call result: $success');
+
+      if (!success) {
+        print('❌ Failed to update driver status in database');
+        dev.log('Failed to update driver status in database', name: 'HomeScreen');
+        // Revert UI state if database update failed
+        setState(() {
+          _isOnline = !isOnline;
+        });
+        return;
       }
 
-      // Start location tracking
-      await LocationService.startLocationTracking();
+      // 2. Handle Socket.IO and location tracking
+      if (isOnline) {
+        // Connect driver to socket for real-time features
+        if (_currentLocation != null) {
+          await SocketService.connectDriver(
+            driverId: _driver!.id,
+            name: _driver!.name,
+            phone: _driver!.phone,
+            vehicleType: _driver!.vehicleType ?? 'Sedan',
+            vehicleNumber: _driver!.vehicleNumber ?? 'N/A',
+            rating: _driver!.rating ?? 4.5,
+            totalRides: _driver!.totalRides,
+            totalEarnings: _driver!.totalEarnings,
+            latitude: _currentLocation!.latitude,
+            longitude: _currentLocation!.longitude,
+          );
+        }
 
-      // Status is handled by backend via Socket.IO
-    } else {
-      // Disconnect driver from socket
-      await SocketService.setDriverOffline(driverId: _driver!.id);
+        // Start location tracking
+        await LocationService.startLocationTracking();
 
-      // Stop location tracking
-      await LocationService.stopLocationTracking();
+        dev.log('Driver is now ONLINE - database and socket updated', name: 'HomeScreen');
+      } else {
+        // Disconnect driver from socket
+        await SocketService.setDriverOffline(driverId: _driver!.id);
 
-      // Status is handled by backend via Socket.IO
+        // Stop location tracking
+        await LocationService.stopLocationTracking();
+
+        dev.log('Driver is now OFFLINE - database and socket updated', name: 'HomeScreen');
+      }
+    } catch (e) {
+      dev.log('Error toggling driver status: $e', name: 'HomeScreen');
+      // Revert UI state on error
+      setState(() {
+        _isOnline = !isOnline;
+      });
     }
   }
 

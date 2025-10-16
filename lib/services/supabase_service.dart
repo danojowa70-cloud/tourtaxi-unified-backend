@@ -32,6 +32,15 @@ class SupabaseService {
     required String password,
     required String name,
     required String phone,
+    String? vehicleType,
+    String? vehicleNumber,
+    String? licenseNumber,
+    String? profileImage,
+    String? vehicleModel,
+    String? vehicleColor,
+    String? licenseExpiry,
+    String? insuranceNumber,
+    String? insuranceExpiry,
   }) async {
     try {
       final response = await _client.auth.signUp(
@@ -50,6 +59,15 @@ class SupabaseService {
           email: email,
           name: name,
           phone: phone,
+          vehicleType: vehicleType,
+          vehicleNumber: vehicleNumber,
+          licenseNumber: licenseNumber,
+          profileImage: profileImage,
+          vehicleModel: vehicleModel,
+          vehicleColor: vehicleColor,
+          licenseExpiry: licenseExpiry,
+          insuranceNumber: insuranceNumber,
+          insuranceExpiry: insuranceExpiry,
         );
       }
 
@@ -100,6 +118,15 @@ class SupabaseService {
     required String email,
     required String name,
     required String phone,
+    String? vehicleType,
+    String? vehicleNumber,
+    String? licenseNumber,
+    String? profileImage,
+    String? vehicleModel,
+    String? vehicleColor,
+    String? licenseExpiry,
+    String? insuranceNumber,
+    String? insuranceExpiry,
   }) async {
     try {
       await _client.from('drivers').insert({
@@ -107,7 +134,18 @@ class SupabaseService {
         'email': email,
         'name': name,
         'phone': phone,
+        'vehicle_type': vehicleType ?? 'Not Specified',
+        'vehicle_number': vehicleNumber ?? 'Not Specified',
+        'license_number': licenseNumber ?? 'Not Specified',
+        'profile_image': profileImage,
+        'vehicle_model': vehicleModel,
+        'vehicle_color': vehicleColor,
+        'license_expiry': licenseExpiry,
+        'insurance_number': insuranceNumber,
+        'insurance_expiry': insuranceExpiry,
         'is_online': false,
+        'is_available': false,
+        'rating': 5.0,
         'total_rides': 0,
         'total_earnings': 0.0,
         'created_at': DateTime.now().toIso8601String(),

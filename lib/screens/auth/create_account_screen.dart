@@ -19,6 +19,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _vehicleTypeController = TextEditingController();
+  final _vehicleModelController = TextEditingController();
+  final _vehicleColorController = TextEditingController();
+  final _vehicleNumberController = TextEditingController();
+  final _licenseNumberController = TextEditingController();
+  final _licenseExpiryController = TextEditingController();
+  final _insuranceNumberController = TextEditingController();
+  final _insuranceExpiryController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
@@ -30,6 +38,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _vehicleTypeController.dispose();
+    _vehicleModelController.dispose();
+    _vehicleColorController.dispose();
+    _vehicleNumberController.dispose();
+    _licenseNumberController.dispose();
+    _licenseExpiryController.dispose();
+    _insuranceNumberController.dispose();
+    _insuranceExpiryController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -50,6 +66,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         password: _passwordController.text,
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
+        vehicleType: _vehicleTypeController.text.trim(),
+        vehicleModel: _vehicleModelController.text.trim(),
+        vehicleColor: _vehicleColorController.text.trim(),
+        vehicleNumber: _vehicleNumberController.text.trim(),
+        licenseNumber: _licenseNumberController.text.trim(),
+        licenseExpiry: _licenseExpiryController.text.trim(),
+        insuranceNumber: _insuranceNumberController.text.trim(),
+        insuranceExpiry: _insuranceExpiryController.text.trim(),
       );
 
       // If email confirmations are enabled, Supabase may return user == null here.
@@ -266,6 +290,216 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 
                 const SizedBox(height: AppConstants.spacingMedium),
                 
+                // Vehicle Type Field
+                CustomTextField(
+                  controller: _vehicleTypeController,
+                  placeholder: 'Vehicle Type (e.g., Sedan, SUV, Hatchback)',
+                  prefixIcon: CupertinoIcons.car_fill,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your vehicle type';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1300),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1300),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // Vehicle Model Field
+                CustomTextField(
+                  controller: _vehicleModelController,
+                  placeholder: 'Vehicle Model (e.g., Toyota Camry, Honda City)',
+                  prefixIcon: CupertinoIcons.car_detailed,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your vehicle model';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1400),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1400),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // Vehicle Color Field
+                CustomTextField(
+                  controller: _vehicleColorController,
+                  placeholder: 'Vehicle Color (e.g., White, Black, Blue)',
+                  prefixIcon: CupertinoIcons.paintbrush,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your vehicle color';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1450),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1450),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // Vehicle Number Field
+                CustomTextField(
+                  controller: _vehicleNumberController,
+                  placeholder: 'Vehicle Number (License Plate)',
+                  prefixIcon: CupertinoIcons.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your vehicle number';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1600),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1600),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // License Number Field
+                CustomTextField(
+                  controller: _licenseNumberController,
+                  placeholder: 'Driver License Number',
+                  prefixIcon: CupertinoIcons.doc_text,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your license number';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1700),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1800),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // License Expiry Field
+                CustomTextField(
+                  controller: _licenseExpiryController,
+                  placeholder: 'License Expiry Date (DD/MM/YYYY)',
+                  keyboardType: TextInputType.datetime,
+                  prefixIcon: CupertinoIcons.calendar,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter license expiry date';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1900),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 1900),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // Insurance Number Field
+                CustomTextField(
+                  controller: _insuranceNumberController,
+                  placeholder: 'Insurance Policy Number',
+                  prefixIcon: CupertinoIcons.shield,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter insurance number';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 2000),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 2000),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
+                // Insurance Expiry Field
+                CustomTextField(
+                  controller: _insuranceExpiryController,
+                  placeholder: 'Insurance Expiry Date (DD/MM/YYYY)',
+                  keyboardType: TextInputType.datetime,
+                  prefixIcon: CupertinoIcons.calendar_today,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter insurance expiry date';
+                    }
+                    return null;
+                  },
+                )
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 2100),
+                      duration: AppConstants.mediumAnimation,
+                    )
+                    .slideX(
+                      begin: -0.3,
+                      end: 0,
+                      delay: const Duration(milliseconds: 2100),
+                      duration: AppConstants.mediumAnimation,
+                    ),
+                
+                const SizedBox(height: AppConstants.spacingMedium),
+                
                 // Password Field
                 CustomTextField(
                   controller: _passwordController,
@@ -292,13 +526,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 )
                     .animate()
                     .fadeIn(
-                      delay: const Duration(milliseconds: 1300),
+                      delay: const Duration(milliseconds: 2200),
                       duration: AppConstants.mediumAnimation,
                     )
                     .slideX(
                       begin: -0.3,
                       end: 0,
-                      delay: const Duration(milliseconds: 1300),
+                      delay: const Duration(milliseconds: 2200),
                       duration: AppConstants.mediumAnimation,
                     ),
                 
@@ -330,13 +564,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 )
                     .animate()
                     .fadeIn(
-                      delay: const Duration(milliseconds: 1500),
+                      delay: const Duration(milliseconds: 2300),
                       duration: AppConstants.mediumAnimation,
                     )
                     .slideX(
                       begin: -0.3,
                       end: 0,
-                      delay: const Duration(milliseconds: 1500),
+                      delay: const Duration(milliseconds: 2300),
                       duration: AppConstants.mediumAnimation,
                     ),
                 
@@ -350,13 +584,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 )
                     .animate()
                     .fadeIn(
-                      delay: const Duration(milliseconds: 1700),
+                      delay: const Duration(milliseconds: 2300),
                       duration: AppConstants.mediumAnimation,
                     )
                     .slideY(
                       begin: 0.3,
                       end: 0,
-                      delay: const Duration(milliseconds: 1700),
+                      delay: const Duration(milliseconds: 2300),
                       duration: AppConstants.mediumAnimation,
                     ),
               ],

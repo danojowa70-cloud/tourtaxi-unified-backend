@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "505889960679",
+    "project_id": "tourtaxi-75a8c",
+    "storage_bucket": "tourtaxi-75a8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:505889960679:android:756074ce77e21f5e6d6842",
+        "android_client_info": {
+          "package_name": "com.example.tour_taxis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQ28vRrsPuridRTS-0sbXTRSz8b2aA6Ag"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

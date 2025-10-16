@@ -57,4 +57,51 @@ class ApiService {
     if (body is List) return body;
     return [];
   }
+
+  /// Update driver online/offline status in database
+  static Future<bool> updateDriverStatus({
+    required String driverId,
+    required bool isOnline,
+  }) async {
+    try {
+      final uri = Uri.parse('$_base/driver/status');
+      print('📡 API URL: $uri');
+      print('📤 Request payload: {"driver_id": "$driverId", "is_online": $isOnline, "is_available": $isOnline}');
+      
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'driver_id': driverId,
+          'is_online': isOnline,
+          'is_available': isOnline, // When online, driver is available for rides
+        }),
+      );
+      
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final responseBody = jsonDecode(response.body);
+        final data = responseBody['data'] as Map<String, dynamic>?;
+        
+        if (data != null) {
+          print('🔍 Backend response data:');
+          print('   driver_id: ${data['driver_id']}');
+          print('   is_online: ${data['is_online']}');
+          print('   is_available: ${data['is_available']}');
+          print('   updated_at: ${data['updated_at']}');
+        } else {
+          print('⚠️  No data returned in response');
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('❌ API Error: $e');
+      throw Exception('Failed to update driver status: $e');
+    }
+  }
 }

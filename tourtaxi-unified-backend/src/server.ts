@@ -6,7 +6,7 @@ import { Server } from 'socket.io';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import supabase from './config/supabase';
-import { registerDriverHandlers, activeDrivers, pendingRides, completedRides, driverSessions } from './handlers/driverHandler';
+import { registerDriverHandlers, activeDrivers, pendingRides, completedRides, driverSessions, updateDriverStatus } from './handlers/driverHandler';
 import { registerPassengerHandlers, activePassengers, passengerSessions } from './handlers/passengerHandler';
 import { ClientToServerEvents, ServerToClientEvents } from './types/index';
 
@@ -205,6 +205,42 @@ app.get('/api/ride-events', async (req: express.Request, res: express.Response) 
   }
 });
 
+// Driver status update endpoint
+app.post('/driver/status', updateDriverStatus);
+
+// Debug endpoint to check driver status in database
+app.get('/driver/:driverId/status', async (req: express.Request, res: express.Response) => {
+  try {
+    const driverId = req.params.driverId;
+    
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('id, name, is_online, is_available, updated_at')
+      .eq('id', driverId)
+      .single();
+    
+    if (error) {
+      return res.status(404).json({ error: 'Driver not found in database', details: error.message });
+    }
+    
+    // Also get from memory for comparison
+    const memoryDriver = activeDrivers.get(driverId);
+    
+    res.json({
+      database: data,
+      memory: memoryDriver ? {
+        id: driverId,
+        name: memoryDriver.name,
+        isOnline: memoryDriver.isOnline,
+        isAvailable: memoryDriver.isAvailable
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get driver status', message: error.message });
+  }
+});
+
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ err }, 'Unhandled error in Express');
@@ -349,12 +385,17 @@ server.listen(PORT, () => {
   console.log(`🗺️  Google Maps API configured`);
   console.log('='.repeat(60));
   console.log('📋 Available endpoints:');
-  console.log('   GET  /health              - Health check');
-  console.log('   GET  /status              - System status');
-  console.log('   GET  /api/drivers         - Active drivers');
-  console.log('   GET  /api/passengers      - Active passengers');
-  console.log('   GET  /api/rides           - Pending rides');
-  console.log('   GET  /api/completed-rides - Completed rides');
+  console.log('   GET  /health                     - Health check');
+  console.log('   GET  /status                     - System status');
+  console.log('   GET  /api/drivers                - Active drivers');
+  console.log('   GET  /api/passengers             - Active passengers');
+  console.log('   GET  /api/rides                  - Pending rides');
+  console.log('   GET  /api/completed-rides        - Completed rides');
+  console.log('   GET  /api/driver/:driverId       - Get specific driver');
+  console.log('   GET  /api/passenger/:passengerId - Get specific passenger');
+  console.log('   GET  /api/ride/:rideId           - Get specific ride');
+  console.log('   GET  /api/ride-events            - Ride events (with filters)');
+  console.log('  POST  /driver/status              - Update driver online/offline status');
   console.log('='.repeat(60));
 });
 

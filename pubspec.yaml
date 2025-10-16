@@ -39,7 +39,7 @@ dependencies:
   supabase_flutter: ^2.5.6
   
   # Socket.io for real-time communication
-  socket_io_client: ^2.0.3+1
+  socket_io_client: ^3.1.2
   
   # Google Maps
   google_maps_flutter: ^2.6.1
