@@ -6,7 +6,7 @@ import { Server } from 'socket.io';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import supabase from './config/supabase';
-import { registerDriverHandlers, activeDrivers, pendingRides, completedRides, driverSessions } from './handlers/driverHandler';
+import { registerDriverHandlers, activeDrivers, pendingRides, completedRides, driverSessions, updateDriverStatus } from './handlers/driverHandler';
 import { registerPassengerHandlers, activePassengers, passengerSessions } from './handlers/passengerHandler';
 import { ClientToServerEvents, ServerToClientEvents } from './types/index';
 
@@ -205,6 +205,9 @@ app.get('/api/ride-events', async (req: express.Request, res: express.Response) 
   }
 });
 
+// Driver status update endpoint
+app.post('/driver/status', updateDriverStatus);
+
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ err }, 'Unhandled error in Express');
@@ -359,6 +362,7 @@ server.listen(PORT, () => {
   console.log('   GET  /api/passenger/:passengerId - Get specific passenger');
   console.log('   GET  /api/ride/:rideId           - Get specific ride');
   console.log('   GET  /api/ride-events            - Ride events (with filters)');
+  console.log('  POST  /driver/status              - Update driver online/offline status');
   console.log('='.repeat(60));
 });
 

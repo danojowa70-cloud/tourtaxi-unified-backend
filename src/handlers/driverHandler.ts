@@ -980,3 +980,65 @@ cron.schedule('*/5 * * * *', () => {
     completed_rides: completedRides.size
   }, 'System status update');
 });
+
+// ========================================
+// REST API FUNCTIONS FOR DRIVER STATUS
+// ========================================
+
+import { Request, Response } from 'express';
+
+export async function updateDriverStatus(req: Request, res: Response) {
+  const { driver_id, is_online } = req.body;
+
+  // Validate required fields
+  if (!driver_id || typeof is_online !== 'boolean') {
+    return res.status(400).json({ 
+      error: 'Missing required fields: driver_id and is_online (boolean)' 
+    });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('drivers')
+      .update({
+        is_online,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', driver_id);
+
+    if (error) {
+      logger.error({ error, driver_id }, 'Failed to update driver status in database');
+      return res.status(400).json({ error: error.message });
+    }
+
+    // Also update in-memory active drivers if exists
+    const driver = activeDrivers.get(driver_id);
+    if (driver) {
+      driver.isOnline = is_online;
+      if (!is_online) {
+        driver.isAvailable = false;
+      }
+    }
+
+    // Log the status change event
+    await logDriverEvent(
+      is_online ? 'driver:online' : 'driver:offline', 
+      { driver_id, name: driver?.name || 'Unknown Driver' }
+    );
+
+    logger.info({ driver_id, is_online }, `Driver status updated: ${is_online ? 'online' : 'offline'}`);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: {
+        driver_id,
+        is_online,
+        updated_at: new Date().toISOString()
+      }
+    });
+    
+  } catch (err) {
+    logger.error({ error: err, driver_id }, 'Internal server error updating driver status');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
