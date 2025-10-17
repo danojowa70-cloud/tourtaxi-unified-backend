@@ -208,6 +208,88 @@ app.get('/api/ride-events', async (req: express.Request, res: express.Response) 
 // Driver status update endpoint
 app.post('/driver/status', updateDriverStatus);
 
+// FCM token update endpoint
+app.post('/driver/fcm-token', async (req: express.Request, res: express.Response) => {
+  try {
+    const { driver_id, fcm_token } = req.body;
+    
+    if (!driver_id || !fcm_token) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: driver_id and fcm_token' 
+      });
+    }
+    
+    const { data, error } = await supabase
+      .from('drivers')
+      .update({
+        fcm_token: fcm_token,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', driver_id);
+    
+    if (error) {
+      logger.error({ error, driver_id }, 'Failed to update FCM token in database');
+      return res.status(400).json({ error: error.message });
+    }
+    
+    logger.info({ driver_id }, 'FCM token updated successfully');
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: {
+        driver_id,
+        updated_at: new Date().toISOString()
+      }
+    });
+    
+  } catch (err: any) {
+    logger.error({ error: err }, 'Internal server error updating FCM token');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Debug endpoint to check driver status in database
+app.get('/driver/:driverId/status', async (req: express.Request, res: express.Response) => {
+  try {
+    const driverId = req.params.driverId;
+    
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('id, name, is_online, is_available, updated_at')
+      .eq('id', driverId)
+      .single();
+    
+    if (error) {
+      return res.status(404).json({ error: 'Driver not found in database', details: error.message });
+    }
+    
+    // Also get from memory for comparison
+    const memoryDriver = activeDrivers.get(driverId);
+    
+    // Check active_drivers table
+    const { data: activeDriverData, error: activeDriverError } = await supabase
+      .from('active_drivers')
+      .select('id, name, is_online, is_available, last_seen, updated_at')
+      .eq('id', driverId)
+      .single();
+    
+    res.json({
+      database: data,
+      active_drivers: activeDriverError ? null : activeDriverData,
+      memory: memoryDriver ? {
+        id: driverId,
+        name: memoryDriver.name,
+        isOnline: memoryDriver.isOnline,
+        isAvailable: memoryDriver.isAvailable
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get driver status', message: error.message });
+  }
+});
+
+
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ err }, 'Unhandled error in Express');

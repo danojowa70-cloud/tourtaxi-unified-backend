@@ -154,7 +154,7 @@ export function registerPassengerHandlers(
       await saveRideToDatabase(ride);
 
       // Find nearby available drivers
-      const nearbyDrivers = findNearbyDrivers(
+      const nearbyDrivers = await findNearbyDrivers(
         validatedRideData.pickup_latitude, 
         validatedRideData.pickup_longitude, 
         env.ride.defaultRadiusKm
@@ -430,11 +430,11 @@ export function registerPassengerHandlers(
   // GET NEARBY DRIVERS
   // ========================================
 
-  socket.on('get_nearby_drivers', (data: { latitude: number; longitude: number; radius?: number }) => {
+  socket.on('get_nearby_drivers', async (data: { latitude: number; longitude: number; radius?: number }) => {
     try {
       const { latitude, longitude, radius = env.ride.defaultRadiusKm } = data;
 
-      const nearbyDrivers = findNearbyDrivers(latitude, longitude, radius);
+      const nearbyDrivers = await findNearbyDrivers(latitude, longitude, radius);
 
       socket.emit('nearby_drivers', {
         latitude,
@@ -443,7 +443,9 @@ export function registerPassengerHandlers(
         drivers: nearbyDrivers.map(driver => ({
           driver_id: driver.driver_id,
           name: driver.name,
+          phone: driver.phone,
           vehicle_type: driver.vehicle_type,
+          vehicle_number: driver.vehicle_number,
           rating: driver.rating,
           distance: driver.distance,
           estimated_arrival: Math.round(driver.distance * 2) // 2 minutes per km estimate
