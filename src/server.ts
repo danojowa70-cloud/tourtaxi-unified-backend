@@ -9,6 +9,7 @@ import supabase from './config/supabase';
 import { registerDriverHandlers, activeDrivers, pendingRides, completedRides, driverSessions, updateDriverStatus } from './handlers/driverHandler';
 import { registerPassengerHandlers, activePassengers, passengerSessions } from './handlers/passengerHandler';
 import { ClientToServerEvents, ServerToClientEvents } from './types/index';
+import boardingPassesRouter from './routes/boarding-passes.routes';
 
 // Create Express app
 const app = express();
@@ -204,6 +205,9 @@ app.get('/api/ride-events', async (req: express.Request, res: express.Response) 
     res.status(500).json({ error: 'Server error', message: e?.message || 'Unknown error' });
   }
 });
+
+// Boarding passes API routes
+app.use('/api/boarding-passes', boardingPassesRouter);
 
 // Driver status update endpoint
 app.post('/driver/status', updateDriverStatus);
@@ -444,6 +448,9 @@ server.listen(PORT, () => {
   console.log('   GET  /api/passenger/:passengerId - Get specific passenger');
   console.log('   GET  /api/ride/:rideId           - Get specific ride');
   console.log('   GET  /api/ride-events            - Ride events (with filters)');
+  console.log('   GET  /api/boarding-passes        - Get user boarding passes');
+  console.log('  POST  /api/boarding-passes        - Create new boarding pass');
+  console.log('  PATCH /api/boarding-passes/:id/status - Update boarding pass status');
   console.log('  POST  /driver/status              - Update driver online/offline status');
   console.log('='.repeat(60));
 });

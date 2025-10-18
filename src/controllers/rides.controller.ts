@@ -6,12 +6,14 @@ const createRideSchema = z.object({
   passengerId: z.string().min(1),
   pickup: z.string().min(1),
   drop: z.string().min(1),
+  pickupLat: z.number().optional(),
+  pickupLng: z.number().optional(),
 });
 
 export async function createRide(req: Request, res: Response) {
   try {
-    const { passengerId, pickup, drop } = createRideSchema.parse(req.body);
-    const ride = await RidesService.createRide(passengerId, pickup, drop);
+    const { passengerId, pickup, drop, pickupLat, pickupLng } = createRideSchema.parse(req.body);
+    const ride = await RidesService.createRide(passengerId, pickup, drop, pickupLat, pickupLng);
     return res.status(201).json(ride);
   } catch (e: any) {
     return res.status(400).json({ error: e.message || 'Invalid request' });

@@ -79,9 +79,9 @@ export async function saveDriverToDatabase(driverData: Driver): Promise<any> {
 
     // Update driver status in active_drivers table using database function
     const { error: statusError } = await supabase.rpc('update_driver_online_status', {
+      available_status: true,
       driver_id: driverData.driver_id,
-      online_status: true,
-      available_status: true
+      online_status: true
     });
 
     if (statusError) {
@@ -1090,9 +1090,9 @@ export async function updateDriverStatus(req: Request, res: Response) {
 
     // Update in active_drivers table using database function
     const { error: statusError } = await supabase.rpc('update_driver_online_status', {
+      available_status: availableStatus,
       driver_id: driver_id,
-      online_status: is_online,
-      available_status: availableStatus
+      online_status: is_online
     });
 
     if (statusError) {
