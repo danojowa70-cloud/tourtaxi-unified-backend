@@ -214,7 +214,8 @@ export function registerPassengerHandlers(
       if (requestsSent > 0) {
         io.to('available_drivers').emit('ride_request', {
           ...rideRequestPayload,
-          broadcast_fallback: true // Flag to indicate this is a fallback broadcast
+          estimated_arrival: '5-10 minutes', // Generic estimate for fallback
+          driver_distance: '0.0' // Unknown distance for fallback broadcast
         });
       }
 

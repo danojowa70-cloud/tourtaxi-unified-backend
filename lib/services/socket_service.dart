@@ -109,6 +109,36 @@ class SocketService {
     _socket?.on('driver_offline', (data) {
       dev.log('Driver offline: $data', name: 'SocketService');
     });
+    
+    // New events from updated backend
+    _socket?.on('driver_connected', (data) {
+      dev.log('Driver connected confirmation: $data', name: 'SocketService');
+      _connectionStatusController.add('driver_connected');
+    });
+    
+    _socket?.on('ride_accepted_confirmation', (data) {
+      dev.log('Ride acceptance confirmed: $data', name: 'SocketService');
+    });
+    
+    _socket?.on('ride_rejected_confirmation', (data) {
+      dev.log('Ride rejection confirmed: $data', name: 'SocketService');
+    });
+    
+    _socket?.on('ride_started_confirmation', (data) {
+      dev.log('Ride start confirmed: $data', name: 'SocketService');
+    });
+    
+    _socket?.on('ride_completed_confirmation', (data) {
+      dev.log('Ride completion confirmed: $data', name: 'SocketService');
+    });
+    
+    _socket?.on('driver_available_confirmation', (data) {
+      dev.log('Driver availability confirmed: $data', name: 'SocketService');
+    });
+    
+    _socket?.on('error', (data) {
+      dev.log('Socket error received: $data', name: 'SocketService');
+    });
   }
 
   static void _startHeartbeat() {
@@ -287,6 +317,19 @@ class SocketService {
       });
     } catch (e) {
       dev.log('Failed to set driver offline: $e', name: 'SocketService');
+    }
+  }
+  
+  static Future<void> setDriverAvailable({
+    required String driverId,
+  }) async {
+    try {
+      _socket?.emit('driver_available', {
+        'driver_id': driverId,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      dev.log('Failed to set driver available: $e', name: 'SocketService');
     }
   }
 
