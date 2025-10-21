@@ -43,13 +43,30 @@ class LocationService {
         throw Exception('Location service is disabled');
       }
 
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+      dev.log('Getting current position with best accuracy...', name: 'LocationService');
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
+        timeLimit: const Duration(seconds: 15), // Longer timeout for better accuracy
       );
+      
+      dev.log('Got position: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)', name: 'LocationService');
+      return position;
     } catch (e) {
       dev.log('Error getting current position: $e', name: 'LocationService');
-      return null;
+      
+      // Try with lower accuracy as fallback
+      try {
+        dev.log('Trying with high accuracy as fallback...', name: 'LocationService');
+        final fallbackPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+        dev.log('Fallback position: ${fallbackPosition.latitude}, ${fallbackPosition.longitude}', name: 'LocationService');
+        return fallbackPosition;
+      } catch (fallbackError) {
+        dev.log('Fallback position also failed: $fallbackError', name: 'LocationService');
+        return null;
+      }
     }
   }
 
@@ -82,15 +99,18 @@ class LocationService {
         throw Exception('Location service is disabled');
       }
 
+      // More aggressive location settings for real-time tracking
       const locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10, // Update every 10 meters
+        accuracy: LocationAccuracy.bestForNavigation, // Highest accuracy
+        distanceFilter: 5, // Update every 5 meters (more frequent)
+        timeLimit: Duration(seconds: 5), // Timeout for each location request
       );
 
       _positionStream = Geolocator.getPositionStream(
         locationSettings: locationSettings,
       ).listen(
         (Position position) {
+          dev.log('Location update: ${position.latitude}, ${position.longitude} (accuracy: ${position.accuracy}m)', name: 'LocationService');
           _locationController.add(position);
           _getAddressForPosition(position);
         },
@@ -98,6 +118,8 @@ class LocationService {
           dev.log('Location tracking error: $error', name: 'LocationService');
         },
       );
+
+      dev.log('Location tracking started with high accuracy', name: 'LocationService');
     } catch (e) {
       dev.log('Error starting location tracking: $e', name: 'LocationService');
     }

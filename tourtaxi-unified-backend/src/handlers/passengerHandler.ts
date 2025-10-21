@@ -154,7 +154,7 @@ export function registerPassengerHandlers(
       await saveRideToDatabase(ride);
 
       // Find nearby available drivers
-      const nearbyDrivers = findNearbyDrivers(
+      const nearbyDrivers = await findNearbyDrivers(
         validatedRideData.pickup_latitude, 
         validatedRideData.pickup_longitude, 
         env.ride.defaultRadiusKm
@@ -175,22 +175,48 @@ export function registerPassengerHandlers(
         return;
       }
 
-      // Send ride request to nearby drivers
+      // Send ride request to nearby drivers using DUAL APPROACH for reliability
       let requestsSent = 0;
+      const rideRequestPayload = {
+        ...ride,
+        timestamp: new Date().toISOString()
+      };
+      
       nearbyDrivers.forEach(driverInfo => {
         const driver = activeDrivers.get(driverInfo.driver_id);
         if (driver && driver.isAvailable) {
           // Calculate estimated arrival time for this driver
           const estimatedArrival = Math.round(driverInfo.distance * 2); // Rough estimate: 2 minutes per km
           
-          io.to(driver.socketId).emit('ride_request', {
-            ...ride,
+          const driverSpecificPayload = {
+            ...rideRequestPayload,
             estimated_arrival: `${estimatedArrival} minutes`,
             driver_distance: driverInfo.distance.toFixed(2)
-          });
+          };
+          
+          // DUAL APPROACH: Send to both driver-specific room AND socket ID
+          // This ensures delivery even if one method fails
+          io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', driverSpecificPayload);
+          io.to(driver.socketId).emit('ride_request', driverSpecificPayload);
+          
           requestsSent++;
+          
+          logger.info({ 
+            driver_id: driverInfo.driver_id, 
+            ride_id: rideId, 
+            socket_id: driver.socketId,
+            distance: driverInfo.distance 
+          }, 'Ride request sent to driver');
         }
       });
+      
+      // FALLBACK: Also broadcast to available_drivers room in case individual targeting failed
+      if (requestsSent > 0) {
+        io.to('available_drivers').emit('ride_request', {
+          ...rideRequestPayload,
+          broadcast_fallback: true // Flag to indicate this is a fallback broadcast
+        });
+      }
 
       logger.info({ 
         ride_id: rideId, 
@@ -430,11 +456,11 @@ export function registerPassengerHandlers(
   // GET NEARBY DRIVERS
   // ========================================
 
-  socket.on('get_nearby_drivers', (data: { latitude: number; longitude: number; radius?: number }) => {
+  socket.on('get_nearby_drivers', async (data: { latitude: number; longitude: number; radius?: number }) => {
     try {
       const { latitude, longitude, radius = env.ride.defaultRadiusKm } = data;
 
-      const nearbyDrivers = findNearbyDrivers(latitude, longitude, radius);
+      const nearbyDrivers = await findNearbyDrivers(latitude, longitude, radius);
 
       socket.emit('nearby_drivers', {
         latitude,
@@ -443,7 +469,9 @@ export function registerPassengerHandlers(
         drivers: nearbyDrivers.map(driver => ({
           driver_id: driver.driver_id,
           name: driver.name,
+          phone: driver.phone,
           vehicle_type: driver.vehicle_type,
+          vehicle_number: driver.vehicle_number,
           rating: driver.rating,
           distance: driver.distance,
           estimated_arrival: Math.round(driver.distance * 2) // 2 minutes per km estimate

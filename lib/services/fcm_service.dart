@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../firebase_options.dart';
 import 'api_service.dart';
 
 class FCMService {
@@ -17,8 +19,10 @@ class FCMService {
     if (_isInitialized) return;
 
     try {
-      // Initialize Firebase
-      await Firebase.initializeApp();
+      // Initialize Firebase with options
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       
       // Request permission for notifications
       await _requestNotificationPermissions();
@@ -28,12 +32,12 @@ class FCMService {
       
       // Get FCM token
       _fcmToken = await _firebaseMessaging.getToken();
-      print('📱 FCM Token: $_fcmToken');
+      dev.log('FCM Token obtained: ${_fcmToken?.substring(0, 20)}...', name: 'FCMService');
       
       // Listen for token refresh
       _firebaseMessaging.onTokenRefresh.listen((token) {
         _fcmToken = token;
-        print('📱 FCM Token refreshed: $token');
+        dev.log('FCM Token refreshed: ${token.substring(0, 20)}...', name: 'FCMService');
         // TODO: Send updated token to your server
       });
       
@@ -53,10 +57,10 @@ class FCMService {
       }
       
       _isInitialized = true;
-      print('✅ FCM Service initialized successfully');
+      dev.log('FCM Service initialized successfully', name: 'FCMService');
       
     } catch (e) {
-      print('❌ FCM Service initialization failed: $e');
+      dev.log('FCM Service initialization failed: $e', name: 'FCMService');
     }
   }
 
@@ -77,7 +81,7 @@ class FCMService {
     // Request notification permission using permission_handler
     PermissionStatus status = await Permission.notification.request();
     if (status.isDenied) {
-      print('⚠️ Notification permission denied');
+      dev.log('Notification permission denied', name: 'FCMService');
     }
   }
 
@@ -120,7 +124,7 @@ class FCMService {
 
   // Handle foreground messages
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    print('📨 Foreground message received: ${message.messageId}');
+    dev.log('Foreground message received: ${message.messageId}', name: 'FCMService');
     
     // Show local notification for foreground messages
     await _showLocalNotification(message);
@@ -128,24 +132,24 @@ class FCMService {
 
   // Handle background messages (must be top-level function)
   static Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    print('📨 Background message received: ${message.messageId}');
+    dev.log('Background message received: ${message.messageId}', name: 'FCMService');
     // Handle background logic here
   }
 
   // Handle message when app is opened from notification
   static void _handleMessageOpenedApp(RemoteMessage message) {
-    print('📨 App opened from notification: ${message.messageId}');
+    dev.log('App opened from notification: ${message.messageId}', name: 'FCMService');
     
     // Navigate to appropriate screen based on message data
     if (message.data.containsKey('ride_id')) {
       // Navigate to ride screen
-      print('🚗 Opening ride: ${message.data['ride_id']}');
+      dev.log('Opening ride: ${message.data['ride_id']}', name: 'FCMService');
     }
   }
 
   // Handle notification tap
   static void _onNotificationTapped(NotificationResponse response) {
-    print('📨 Notification tapped: ${response.payload}');
+    dev.log('Notification tapped: ${response.payload}', name: 'FCMService');
     
     // Parse payload and navigate accordingly
     if (response.payload != null) {
@@ -191,13 +195,13 @@ class FCMService {
   // Subscribe to topic
   static Future<void> subscribeToTopic(String topic) async {
     await _firebaseMessaging.subscribeToTopic(topic);
-    print('📺 Subscribed to topic: $topic');
+    dev.log('Subscribed to topic: $topic', name: 'FCMService');
   }
 
   // Unsubscribe from topic
   static Future<void> unsubscribeFromTopic(String topic) async {
     await _firebaseMessaging.unsubscribeFromTopic(topic);
-    print('📺 Unsubscribed from topic: $topic');
+    dev.log('Unsubscribed from topic: $topic', name: 'FCMService');
   }
 
   // Subscribe driver to ride notifications
@@ -217,8 +221,8 @@ class FCMService {
     if (_fcmToken != null) {
       try {
         // TODO: Send FCM token to your backend server
-        print('📤 Sending FCM token to server for driver: $driverId');
-        print('📱 Token: $_fcmToken');
+        dev.log('Sending FCM token to server for driver: $driverId', name: 'FCMService');
+        dev.log('Token: ${_fcmToken?.substring(0, 20)}...', name: 'FCMService');
         
         // Send token to backend
         await ApiService.updateDriverFCMToken(
@@ -226,7 +230,7 @@ class FCMService {
           fcmToken: _fcmToken!,
         );
       } catch (e) {
-        print('❌ Failed to send FCM token to server: $e');
+        dev.log('Failed to send FCM token to server: $e', name: 'FCMService');
       }
     }
   }
@@ -235,6 +239,8 @@ class FCMService {
 // Background message handler (must be top-level function)
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print('📨 Background message handled: ${message.messageId}');
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  dev.log('Background message handled: ${message.messageId}', name: 'FCMService');
 }

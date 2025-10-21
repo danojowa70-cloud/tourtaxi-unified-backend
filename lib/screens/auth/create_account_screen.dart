@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../constants/app_constants.dart';
 import '../../services/supabase_service.dart';
-import '../../widgets/custom_text_field.dart';
-import '../../widgets/custom_button.dart';
 import '../home/home_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -117,482 +115,413 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     );
   }
 
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool obscureText = false,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+    Widget? suffixIcon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(AppConstants.systemGray5Value),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextFormField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        style: const TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w400,
+          color: Color(AppConstants.textColorValue),
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(
+            color: Color(AppConstants.secondaryTextColorValue),
+          ),
+          prefixIcon: Icon(
+            icon,
+            color: const Color(AppConstants.secondaryTextColorValue),
+          ),
+          suffixIcon: suffixIcon,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+        ),
+        validator: validator,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(AppConstants.backgroundColorValue),
-      navigationBar: const CupertinoNavigationBar(
-        backgroundColor: Color(AppConstants.backgroundColorValue),
-        border: null,
-        middle: Text(
+    return Scaffold(
+      backgroundColor: const Color(AppConstants.systemGray6Value),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            CupertinoIcons.back,
+            color: Color(AppConstants.primaryColorValue),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
           'Create Account',
           style: TextStyle(
-            fontSize: AppConstants.fontSizeLarge,
+            fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Color(AppConstants.textColorValue),
           ),
         ),
+        centerTitle: true,
       ),
-      child: SafeArea(
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppConstants.spacingLarge),
-          child: Form(
-            key: _formKey,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppConstants.spacingLarge),
+                const SizedBox(height: 20),
                 
-                // Logo and Title
+                // Header Section
                 Column(
                   children: [
+                    // Square TourTaxi Logo
                     Container(
-                      width: 80,
-                      height: 80,
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
-                        color: const Color(AppConstants.primaryColorValue),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.car_fill,
-                        size: 40,
                         color: Colors.white,
+                        borderRadius: BorderRadius.circular(25),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Image.asset(
+                          'assets/images/tourtaxi_logo_new.jpg',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     )
                         .animate()
                         .scale(
-                          duration: AppConstants.mediumAnimation,
+                          duration: const Duration(milliseconds: 800),
                           curve: Curves.elasticOut,
                         )
-                        .fadeIn(duration: AppConstants.shortAnimation),
+                        .fadeIn(duration: const Duration(milliseconds: 600)),
                     
-                    const SizedBox(height: AppConstants.spacingLarge),
+                    const SizedBox(height: 24),
                     
+                    // Title
                     const Text(
                       'Join TourTaxi',
                       style: TextStyle(
-                        fontSize: AppConstants.fontSizeXLarge,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
                         color: Color(AppConstants.textColorValue),
+                        letterSpacing: -0.5,
                       ),
                     )
                         .animate()
                         .fadeIn(
-                          delay: const Duration(milliseconds: 300),
-                          duration: AppConstants.mediumAnimation,
-                        )
-                        .slideY(
-                          begin: 0.3,
-                          end: 0,
-                          delay: const Duration(milliseconds: 300),
-                          duration: AppConstants.mediumAnimation,
+                          delay: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 600),
                         ),
                     
-                    const SizedBox(height: AppConstants.spacingSmall),
+                    const SizedBox(height: 8),
                     
+                    // Subtitle
                     const Text(
-                      'Create your driver account',
+                      'Start driving and earning today',
                       style: TextStyle(
-                        fontSize: AppConstants.fontSizeMedium,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w400,
                         color: Color(AppConstants.secondaryTextColorValue),
                       ),
                     )
                         .animate()
                         .fadeIn(
-                          delay: const Duration(milliseconds: 500),
-                          duration: AppConstants.mediumAnimation,
+                          delay: const Duration(milliseconds: 600),
+                          duration: const Duration(milliseconds: 600),
                         ),
                   ],
                 ),
                 
-                const SizedBox(height: AppConstants.spacingXLarge),
+                const SizedBox(height: 32),
                 
-                // Name Field
-                CustomTextField(
-                  controller: _nameController,
-                  placeholder: 'Full Name',
-                  prefixIcon: CupertinoIcons.person,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your full name';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 700),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 700),
-                      duration: AppConstants.mediumAnimation,
+                // Form Card
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                
+                          // Personal Information Section
+                          const Text(
+                            'Personal Information',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Color(AppConstants.textColorValue),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Name Field
+                          _buildTextField(
+                            controller: _nameController,
+                            hint: 'Full Name',
+                            icon: CupertinoIcons.person,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your full name';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // Email Field
+                          _buildTextField(
+                            controller: _emailController,
+                            hint: 'Email Address',
+                            icon: CupertinoIcons.mail,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your email';
+                              }
+                              if (!value.contains('@')) {
+                                return 'Please enter a valid email';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // Phone Field
+                          _buildTextField(
+                            controller: _phoneController,
+                            hint: 'Phone Number',
+                            icon: CupertinoIcons.phone,
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your phone number';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Vehicle Information Section
+                          const Text(
+                            'Vehicle Information',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Color(AppConstants.textColorValue),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Vehicle Type Field
+                          _buildTextField(
+                            controller: _vehicleTypeController,
+                            hint: 'Vehicle Type (e.g., Sedan, SUV)',
+                            icon: CupertinoIcons.car_fill,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your vehicle type';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // Vehicle Number Field
+                          _buildTextField(
+                            controller: _vehicleNumberController,
+                            hint: 'Vehicle Number (License Plate)',
+                            icon: CupertinoIcons.number,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your vehicle number';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // License Number Field
+                          _buildTextField(
+                            controller: _licenseNumberController,
+                            hint: 'Driver License Number',
+                            icon: CupertinoIcons.doc_text,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your license number';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Password Section
+                          const Text(
+                            'Security',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Color(AppConstants.textColorValue),
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Password Field
+                          _buildTextField(
+                            controller: _passwordController,
+                            hint: 'Password',
+                            icon: CupertinoIcons.lock,
+                            obscureText: _obscurePassword,
+                            suffixIcon: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                              child: Icon(
+                                _obscurePassword
+                                    ? CupertinoIcons.eye_slash
+                                    : CupertinoIcons.eye,
+                                color: const Color(AppConstants.secondaryTextColorValue),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter a password';
+                              }
+                              if (value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          // Confirm Password Field
+                          _buildTextField(
+                            controller: _confirmPasswordController,
+                            hint: 'Confirm Password',
+                            icon: CupertinoIcons.lock,
+                            obscureText: _obscureConfirmPassword,
+                            suffixIcon: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                                });
+                              },
+                              child: Icon(
+                                _obscureConfirmPassword
+                                    ? CupertinoIcons.eye_slash
+                                    : CupertinoIcons.eye,
+                                color: const Color(AppConstants.secondaryTextColorValue),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please confirm your password';
+                              }
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Create Account Button
+                          Container(
+                            width: double.infinity,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(AppConstants.primaryColorValue),
+                                  Color(0xFF0056CC),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(AppConstants.primaryColorValue).withValues(alpha: 0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: _isLoading ? null : _createAccount,
+                                child: Center(
+                                  child: _isLoading
+                                      ? const CupertinoActivityIndicator(
+                                          color: Colors.white,
+                                          radius: 12,
+                                        )
+                                      : const Text(
+                                          'Create Account',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
+                ),
                 
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Email Field
-                CustomTextField(
-                  controller: _emailController,
-                  placeholder: 'Email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: CupertinoIcons.mail,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 900),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 900),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Phone Field
-                CustomTextField(
-                  controller: _phoneController,
-                  placeholder: 'Phone Number',
-                  keyboardType: TextInputType.phone,
-                  prefixIcon: CupertinoIcons.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1100),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1100),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Vehicle Type Field
-                CustomTextField(
-                  controller: _vehicleTypeController,
-                  placeholder: 'Vehicle Type (e.g., Sedan, SUV, Hatchback)',
-                  prefixIcon: CupertinoIcons.car_fill,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your vehicle type';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1300),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1300),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Vehicle Model Field
-                CustomTextField(
-                  controller: _vehicleModelController,
-                  placeholder: 'Vehicle Model (e.g., Toyota Camry, Honda City)',
-                  prefixIcon: CupertinoIcons.car_detailed,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your vehicle model';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1400),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1400),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Vehicle Color Field
-                CustomTextField(
-                  controller: _vehicleColorController,
-                  placeholder: 'Vehicle Color (e.g., White, Black, Blue)',
-                  prefixIcon: CupertinoIcons.paintbrush,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your vehicle color';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1450),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1450),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Vehicle Number Field
-                CustomTextField(
-                  controller: _vehicleNumberController,
-                  placeholder: 'Vehicle Number (License Plate)',
-                  prefixIcon: CupertinoIcons.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your vehicle number';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1600),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1600),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // License Number Field
-                CustomTextField(
-                  controller: _licenseNumberController,
-                  placeholder: 'Driver License Number',
-                  prefixIcon: CupertinoIcons.doc_text,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your license number';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1700),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1800),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // License Expiry Field
-                CustomTextField(
-                  controller: _licenseExpiryController,
-                  placeholder: 'License Expiry Date (DD/MM/YYYY)',
-                  keyboardType: TextInputType.datetime,
-                  prefixIcon: CupertinoIcons.calendar,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter license expiry date';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1900),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 1900),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Insurance Number Field
-                CustomTextField(
-                  controller: _insuranceNumberController,
-                  placeholder: 'Insurance Policy Number',
-                  prefixIcon: CupertinoIcons.shield,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter insurance number';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 2000),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 2000),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Insurance Expiry Field
-                CustomTextField(
-                  controller: _insuranceExpiryController,
-                  placeholder: 'Insurance Expiry Date (DD/MM/YYYY)',
-                  keyboardType: TextInputType.datetime,
-                  prefixIcon: CupertinoIcons.calendar_today,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter insurance expiry date';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 2100),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 2100),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Password Field
-                CustomTextField(
-                  controller: _passwordController,
-                  placeholder: 'Password',
-                  obscureText: _obscurePassword,
-                  prefixIcon: CupertinoIcons.lock,
-                  suffixIcon: _obscurePassword
-                      ? CupertinoIcons.eye_slash
-                      : CupertinoIcons.eye,
-                  onSuffixIconTap: () {
-                    setState(() {
-                      _obscurePassword = !_obscurePassword;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 2200),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 2200),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Confirm Password Field
-                CustomTextField(
-                  controller: _confirmPasswordController,
-                  placeholder: 'Confirm Password',
-                  obscureText: _obscureConfirmPassword,
-                  prefixIcon: CupertinoIcons.lock,
-                  suffixIcon: _obscureConfirmPassword
-                      ? CupertinoIcons.eye_slash
-                      : CupertinoIcons.eye,
-                  onSuffixIconTap: () {
-                    setState(() {
-                      _obscureConfirmPassword = !_obscureConfirmPassword;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please confirm your password';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 2300),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 2300),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingLarge),
-                
-                // Create Account Button
-                CustomButton(
-                  text: 'Create Account',
-                  onPressed: _isLoading ? null : _createAccount,
-                  isLoading: _isLoading,
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 2300),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideY(
-                      begin: 0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 2300),
-                      duration: AppConstants.mediumAnimation,
-                    ),
+                const SizedBox(height: 40),
               ],
             ),
           ),

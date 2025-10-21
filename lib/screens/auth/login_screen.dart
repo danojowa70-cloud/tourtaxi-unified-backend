@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../constants/app_constants.dart';
 import '../../services/supabase_service.dart';
-import '../../widgets/custom_text_field.dart';
-import '../../widgets/custom_button.dart';
 import 'create_account_screen.dart';
 import '../home/home_screen.dart';
 
@@ -85,169 +83,309 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(AppConstants.backgroundColorValue),
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: const Color(AppConstants.systemGray6Value), // Light gray background
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppConstants.spacingLarge),
-          child: Form(
-            key: _formKey,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppConstants.spacingXLarge * 2),
+                const SizedBox(height: 60),
                 
-                // Logo and Title
+                // Logo Section
                 Column(
                   children: [
+                    // Square TourTaxi Logo
                     Container(
-                      width: 80,
-                      height: 80,
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
-                        color: const Color(AppConstants.primaryColorValue),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.car_fill,
-                        size: 40,
                         color: Colors.white,
+                        borderRadius: BorderRadius.circular(30), // Apple-style rounded corners
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Image.asset(
+                          'assets/images/tourtaxi_logo_new.jpg',
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     )
                         .animate()
                         .scale(
-                          duration: AppConstants.mediumAnimation,
+                          duration: const Duration(milliseconds: 800),
                           curve: Curves.elasticOut,
                         )
-                        .fadeIn(duration: AppConstants.shortAnimation),
+                        .fadeIn(duration: const Duration(milliseconds: 600)),
                     
-                    const SizedBox(height: AppConstants.spacingLarge),
+                    const SizedBox(height: 32),
                     
+                    // Welcome Text
                     const Text(
                       'Welcome Back',
                       style: TextStyle(
-                        fontSize: AppConstants.fontSizeXLarge,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 34, // iOS Large Title size
+                        fontWeight: FontWeight.w700,
                         color: Color(AppConstants.textColorValue),
+                        letterSpacing: -0.5,
                       ),
                     )
                         .animate()
                         .fadeIn(
-                          delay: const Duration(milliseconds: 300),
-                          duration: AppConstants.mediumAnimation,
+                          delay: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 600),
                         )
                         .slideY(
                           begin: 0.3,
                           end: 0,
-                          delay: const Duration(milliseconds: 300),
-                          duration: AppConstants.mediumAnimation,
+                          delay: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 600),
                         ),
                     
-                    const SizedBox(height: AppConstants.spacingSmall),
+                    const SizedBox(height: 8),
                     
+                    // Subtitle
                     const Text(
-                      'Sign in to continue',
+                      'Sign in to your TourTaxi account',
                       style: TextStyle(
-                        fontSize: AppConstants.fontSizeMedium,
+                        fontSize: 17, // iOS Body size
+                        fontWeight: FontWeight.w400,
                         color: Color(AppConstants.secondaryTextColorValue),
                       ),
                     )
                         .animate()
                         .fadeIn(
-                          delay: const Duration(milliseconds: 500),
-                          duration: AppConstants.mediumAnimation,
+                          delay: const Duration(milliseconds: 600),
+                          duration: const Duration(milliseconds: 600),
                         ),
                   ],
                 ),
                 
-                const SizedBox(height: AppConstants.spacingXLarge * 2),
+                const SizedBox(height: 48),
                 
-                // Email Field
-                CustomTextField(
-                  controller: _emailController,
-                  placeholder: 'Email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: CupertinoIcons.mail,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 700),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 700),
-                      duration: AppConstants.mediumAnimation,
+                // Login Form Card
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20), // Apple-style rounded corners
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Email Field
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(AppConstants.systemGray5Value),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w400,
+                                color: Color(AppConstants.textColorValue),
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'Email',
+                                hintStyle: TextStyle(
+                                  color: Color(AppConstants.secondaryTextColorValue),
+                                ),
+                                prefixIcon: Icon(
+                                  CupertinoIcons.mail,
+                                  color: Color(AppConstants.secondaryTextColorValue),
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your email';
+                                }
+                                if (!value.contains('@')) {
+                                  return 'Please enter a valid email';
+                                }
+                                return null;
+                              },
+                            ),
+                          )
+                              .animate()
+                              .fadeIn(
+                                delay: const Duration(milliseconds: 800),
+                                duration: const Duration(milliseconds: 600),
+                              )
+                              .slideY(
+                                begin: 0.2,
+                                end: 0,
+                                delay: const Duration(milliseconds: 800),
+                                duration: const Duration(milliseconds: 600),
+                              ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Password Field
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(AppConstants.systemGray5Value),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w400,
+                                color: Color(AppConstants.textColorValue),
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Password',
+                                hintStyle: const TextStyle(
+                                  color: Color(AppConstants.secondaryTextColorValue),
+                                ),
+                                prefixIcon: const Icon(
+                                  CupertinoIcons.lock,
+                                  color: Color(AppConstants.secondaryTextColorValue),
+                                ),
+                                suffixIcon: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                  child: Icon(
+                                    _obscurePassword
+                                        ? CupertinoIcons.eye_slash
+                                        : CupertinoIcons.eye,
+                                    color: const Color(AppConstants.secondaryTextColorValue),
+                                  ),
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your password';
+                                }
+                                if (value.length < 6) {
+                                  return 'Password must be at least 6 characters';
+                                }
+                                return null;
+                              },
+                            ),
+                          )
+                              .animate()
+                              .fadeIn(
+                                delay: const Duration(milliseconds: 1000),
+                                duration: const Duration(milliseconds: 600),
+                              )
+                              .slideY(
+                                begin: 0.2,
+                                end: 0,
+                                delay: const Duration(milliseconds: 1000),
+                                duration: const Duration(milliseconds: 600),
+                              ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Sign In Button
+                          Container(
+                            width: double.infinity,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(AppConstants.primaryColorValue),
+                                  Color(0xFF0056CC), // Darker blue
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(AppConstants.primaryColorValue).withValues(alpha: 0.3),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: _isLoading ? null : _signIn,
+                                child: Center(
+                                  child: _isLoading
+                                      ? const CupertinoActivityIndicator(
+                                          color: Colors.white,
+                                          radius: 12,
+                                        )
+                                      : const Text(
+                                          'Sign In',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          )
+                              .animate()
+                              .fadeIn(
+                                delay: const Duration(milliseconds: 1200),
+                                duration: const Duration(milliseconds: 600),
+                              )
+                              .slideY(
+                                begin: 0.2,
+                                end: 0,
+                                delay: const Duration(milliseconds: 1200),
+                                duration: const Duration(milliseconds: 600),
+                              ),
+                        ],
+                      ),
                     ),
-                
-                const SizedBox(height: AppConstants.spacingMedium),
-                
-                // Password Field
-                CustomTextField(
-                  controller: _passwordController,
-                  placeholder: 'Password',
-                  obscureText: _obscurePassword,
-                  prefixIcon: CupertinoIcons.lock,
-                  suffixIcon: _obscurePassword
-                      ? CupertinoIcons.eye_slash
-                      : CupertinoIcons.eye,
-                  onSuffixIconTap: () {
-                    setState(() {
-                      _obscurePassword = !_obscurePassword;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
+                  ),
                 )
                     .animate()
                     .fadeIn(
-                      delay: const Duration(milliseconds: 900),
-                      duration: AppConstants.mediumAnimation,
-                    )
-                    .slideX(
-                      begin: -0.3,
-                      end: 0,
-                      delay: const Duration(milliseconds: 900),
-                      duration: AppConstants.mediumAnimation,
-                    ),
-                
-                const SizedBox(height: AppConstants.spacingLarge),
-                
-                // Sign In Button
-                CustomButton(
-                  text: 'Sign In',
-                  onPressed: _isLoading ? null : _signIn,
-                  isLoading: _isLoading,
-                )
-                    .animate()
-                    .fadeIn(
-                      delay: const Duration(milliseconds: 1100),
-                      duration: AppConstants.mediumAnimation,
+                      delay: const Duration(milliseconds: 800),
+                      duration: const Duration(milliseconds: 600),
                     )
                     .slideY(
                       begin: 0.3,
                       end: 0,
-                      delay: const Duration(milliseconds: 1100),
-                      duration: AppConstants.mediumAnimation,
+                      delay: const Duration(milliseconds: 800),
+                      duration: const Duration(milliseconds: 600),
                     ),
                 
-                const SizedBox(height: AppConstants.spacingLarge),
+                const SizedBox(height: 32),
                 
                 // Create Account Link
                 Row(
@@ -256,22 +394,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text(
                       "Don't have an account? ",
                       style: TextStyle(
-                        fontSize: AppConstants.fontSizeMedium,
+                        fontSize: 17,
                         color: Color(AppConstants.secondaryTextColorValue),
                       ),
                     ),
                     GestureDetector(
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(
+                          CupertinoPageRoute(
                             builder: (context) => const CreateAccountScreen(),
                           ),
                         );
                       },
                       child: const Text(
-                        'Create Account',
+                        'Sign Up',
                         style: TextStyle(
-                          fontSize: AppConstants.fontSizeMedium,
+                          fontSize: 17,
                           color: Color(AppConstants.primaryColorValue),
                           fontWeight: FontWeight.w600,
                         ),
@@ -281,9 +419,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 )
                     .animate()
                     .fadeIn(
-                      delay: const Duration(milliseconds: 1300),
-                      duration: AppConstants.mediumAnimation,
+                      delay: const Duration(milliseconds: 1400),
+                      duration: const Duration(milliseconds: 600),
                     ),
+                
+                const SizedBox(height: 40),
               ],
             ),
           ),

@@ -56,7 +56,8 @@ export const rideAssignments = new Map<string, string>(); // ride_id -> driver_i
 
 export async function saveDriverToDatabase(driverData: Driver): Promise<any> {
   try {
-    const { data, error } = await supabase
+    // First, save basic driver info to drivers table
+    const { data: driverData_result, error: driverError } = await supabase
       .from('drivers')
       .upsert({
         id: driverData.driver_id,
@@ -74,16 +75,42 @@ export async function saveDriverToDatabase(driverData: Driver): Promise<any> {
         last_location_update: new Date().toISOString()
       }, { onConflict: 'id' });
 
-    if (error) throw error;
-    return data;
+    if (driverError) throw driverError;
+
+    // Update driver status in active_drivers table using database function
+    const { error: statusError } = await supabase.rpc('update_driver_online_status', {
+      available_status: true,
+      driver_id: driverData.driver_id,
+      online_status: true
+    });
+
+    if (statusError) {
+      logger.error({ error: statusError }, 'Error updating driver status in active_drivers');
+    }
+
+    // Update location using database function
+    const { error: locationError } = await supabase.rpc('update_driver_location_and_status', {
+      driver_id: driverData.driver_id,
+      lat: driverData.latitude,
+      lng: driverData.longitude,
+      heading_val: 0.0,
+      speed_val: 0.0
+    });
+
+    if (locationError) {
+      logger.error({ error: locationError }, 'Error updating driver location');
+    }
+
+    return driverData_result;
   } catch (error) {
     logger.error({ error }, 'Error saving driver to database');
     return null;
   }
 }
 
-export async function updateDriverLocation(driverId: string, latitude: number, longitude: number): Promise<void> {
+export async function updateDriverLocation(driverId: string, latitude: number, longitude: number, heading?: number, speed?: number): Promise<void> {
   try {
+    // Update driver basic info
     const { error } = await supabase
       .from('drivers')
       .update({
@@ -95,15 +122,18 @@ export async function updateDriverLocation(driverId: string, latitude: number, l
 
     if (error) throw error;
 
-    // Also save to location history
-    await supabase
-      .from('driver_locations')
-      .insert({
-        driver_id: driverId,
-        latitude: latitude,
-        longitude: longitude,
-        timestamp: new Date().toISOString()
-      });
+    // Use database function to update location and keep driver active
+    const { error: locationError } = await supabase.rpc('update_driver_location_and_status', {
+      driver_id: driverId,
+      lat: latitude,
+      lng: longitude,
+      heading_val: heading || 0.0,
+      speed_val: speed || 0.0
+    });
+
+    if (locationError) {
+      logger.error({ error: locationError }, 'Error updating driver location via function');
+    }
 
   } catch (error) {
     logger.error({ error }, 'Error updating driver location');
@@ -352,7 +382,49 @@ export function calculateFare(distance: number, duration: number): number {
   return Math.max(fare, env.fare.minimumFare);
 }
 
-export function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm): NearbyDriverInfo[] {
+export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm): Promise<NearbyDriverInfo[]> {
+  try {
+    // Use database function to get nearby online and available drivers
+    const { data: nearbyDriversData, error } = await supabase.rpc('get_nearby_drivers', {
+      lat: lat,
+      lng: lng,
+      radius_km: radiusKm
+    });
+
+    if (error) {
+      logger.error({ error }, 'Error fetching nearby drivers from database');
+      // Fallback to in-memory search
+      return findNearbyDriversInMemory(lat, lng, radiusKm);
+    }
+
+    if (!nearbyDriversData || nearbyDriversData.length === 0) {
+      logger.info({ lat, lng, radiusKm }, 'No nearby drivers found in database');
+      return [];
+    }
+
+    // Transform database results to NearbyDriverInfo format
+    const nearbyDrivers: NearbyDriverInfo[] = nearbyDriversData.map((driver: any) => ({
+      driver_id: driver.id,
+      distance: driver.distance_km,
+      rating: driver.rating || 4.5,
+      vehicle_type: `${driver.vehicle_make || ''} ${driver.vehicle_model || driver.vehicle_type || 'Vehicle'}`.trim(),
+      name: driver.name || 'Driver',
+      phone: driver.phone || '',
+      vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown'
+    }));
+
+    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm }, 'Found nearby drivers from database');
+    return nearbyDrivers;
+
+  } catch (error) {
+    logger.error({ error }, 'Error in findNearbyDrivers');
+    // Fallback to in-memory search
+    return findNearbyDriversInMemory(lat, lng, radiusKm);
+  }
+}
+
+// Fallback in-memory search function
+function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number): NearbyDriverInfo[] {
   const nearbyDrivers: NearbyDriverInfo[] = [];
   
   activeDrivers.forEach((driver, driverId) => {
@@ -421,7 +493,7 @@ export function registerDriverHandlers(
         return;
       }
 
-      // Store driver information
+      // Store driver information in memory FIRST
       const driverInfo: Driver = {
         socketId: socket.id,
         driver_id: validatedData.driver_id,
@@ -441,14 +513,21 @@ export function registerDriverHandlers(
         connectedAt: new Date().toISOString()
       };
 
+      // Add to activeDrivers Map IMMEDIATELY to avoid race conditions
       activeDrivers.set(validatedData.driver_id, driverInfo);
-
-      // Save driver to database
-      await saveDriverToDatabase(driverInfo);
 
       // Store session mapping
       driverSessions.set(socket.id, validatedData.driver_id);
       (socket as any).driverId = validatedData.driver_id;
+
+      // Join driver to necessary socket rooms
+      socket.join(`driver_${validatedData.driver_id}`);
+      socket.join('available_drivers'); // Room for all available drivers
+      
+      // Save driver to database (asynchronously, don't block connection)
+      saveDriverToDatabase(driverInfo).catch(error => {
+        logger.error({ error, driver_id: validatedData.driver_id }, 'Failed to save driver to database');
+      });
 
       // Log driver online event
       await logDriverEvent('driver:online', { driver_id: validatedData.driver_id, name: validatedData.name });
@@ -590,6 +669,9 @@ export function registerDriverHandlers(
       // Update driver status
       driver.isAvailable = false;
       driver.currentRide = rideId;
+      
+      // Remove driver from available_drivers room since they're now busy
+      socket.leave('available_drivers');
 
       // Store ride assignment
       rideAssignments.set(rideId, driverId);
@@ -664,7 +746,7 @@ export function registerDriverHandlers(
   // RIDE REJECTION
   // ========================================
   
-  socket.on('ride_reject', (data) => {
+  socket.on('ride_reject', async (data) => {
     try {
       logger.info({ driver_id: data.driver_id, ride_id: data.ride_id }, 'Driver rejecting ride');
       
@@ -674,22 +756,26 @@ export function registerDriverHandlers(
       const ride = pendingRides.get(rideId);
       if (ride && ride.status === 'requested') {
         // Find other nearby drivers and send the request to them
-        const nearbyDrivers = findNearbyDrivers(
+        const nearbyDrivers = (await findNearbyDrivers(
           ride.pickup_latitude, 
           ride.pickup_longitude, 
           env.ride.defaultRadiusKm
-        ).filter(driverInfo => driverInfo.driver_id !== driverId);
+        )).filter(driverInfo => driverInfo.driver_id !== driverId);
 
         let requestsSent = 0;
         nearbyDrivers.forEach(driverInfo => {
           const driver = activeDrivers.get(driverInfo.driver_id);
           if (driver && driver.isAvailable) {
             const estimatedArrival = Math.round(driverInfo.distance * 2);
-            io.to(driver.socketId).emit('ride_request', {
+            const rideRequestPayload = {
               ...ride,
               estimated_arrival: `${estimatedArrival} minutes`,
               driver_distance: driverInfo.distance.toFixed(2)
-            });
+            };
+            
+            // Use dual approach for reliability
+            io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', rideRequestPayload);
+            io.to(driver.socketId).emit('ride_request', rideRequestPayload);
             requestsSent++;
           }
         });
@@ -804,6 +890,9 @@ export function registerDriverHandlers(
       driver.totalEarnings += parseFloat(ride.actual_fare);
       driver.isAvailable = true;
       driver.currentRide = null;
+      
+      // Rejoin available_drivers room since ride is complete
+      socket.join('available_drivers');
 
       // Move ride to completed rides
       completedRides.set(rideId, ride);
@@ -936,6 +1025,9 @@ export function registerDriverHandlers(
         driver.isAvailable = true;
         driver.currentRide = null;
         
+        // Join available_drivers room to receive ride requests
+        socket.join('available_drivers');
+        
         logger.info({ driver_id: driverId }, 'Driver is now available');
         
         socket.emit('driver_available_confirmation', {
@@ -1001,7 +1093,8 @@ export async function updateDriverStatus(req: Request, res: Response) {
   const availableStatus = typeof is_available === 'boolean' ? is_available : is_online;
 
   try {
-    const { data, error } = await supabase
+    // Update in drivers table
+    const { error: driverError } = await supabase
       .from('drivers')
       .update({
         is_online,
@@ -1010,9 +1103,21 @@ export async function updateDriverStatus(req: Request, res: Response) {
       })
       .eq('id', driver_id);
 
-    if (error) {
-      logger.error({ error, driver_id }, 'Failed to update driver status in database');
-      return res.status(400).json({ error: error.message });
+    if (driverError) {
+      logger.error({ error: driverError, driver_id }, 'Failed to update driver status in drivers table');
+      return res.status(400).json({ error: driverError.message });
+    }
+
+    // Update in active_drivers table using database function
+    const { error: statusError } = await supabase.rpc('update_driver_online_status', {
+      available_status: availableStatus,
+      driver_id: driver_id,
+      online_status: is_online
+    });
+
+    if (statusError) {
+      logger.error({ error: statusError, driver_id }, 'Failed to update driver status in active_drivers');
+      // Don't return error here, as the drivers table was updated successfully
     }
 
     // Also update in-memory active drivers if exists
@@ -1031,7 +1136,7 @@ export async function updateDriverStatus(req: Request, res: Response) {
       { driver_id, name: driver?.name || 'Unknown Driver' }
     );
 
-    logger.info({ driver_id, is_online }, `Driver status updated: ${is_online ? 'online' : 'offline'}`);
+    logger.info({ driver_id, is_online, is_available: availableStatus }, `Driver status updated: ${is_online ? 'online' : 'offline'}`);
     
     return res.status(200).json({ 
       success: true, 

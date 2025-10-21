@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/driver_model.dart';
 import '../models/ride_model.dart';
@@ -179,42 +180,92 @@ class SupabaseService {
 
   static Future<Driver?> getDriverProfile(String driverId) async {
     try {
-      // Try to find in active drivers from backend
-      final drivers = await ApiService.getActiveDrivers();
-      final match = drivers.cast<Map>().firstWhere(
-        (d) => (d['id'] ?? d['driver_id']) == driverId,
-        orElse: () => {},
-      );
-      if (match.isNotEmpty) {
-        return Driver(
-          id: (match['id'] ?? match['driver_id']) ?? driverId,
-          email: match['email'] ?? '',
-          name: match['name'] ?? '',
-          phone: match['phone'] ?? '',
-          profileImage: match['profile_image'],
-          vehicleType: match['vehicle_type'],
-          vehicleNumber: match['vehicle_number'],
-          licenseNumber: match['license_number'],
-          isOnline: (match['is_online'] ?? match['online'] ?? true) == true,
-          rating: (match['rating'] as num?)?.toDouble(),
-          totalRides: (match['total_rides'] as num?)?.toInt() ?? 0,
-          totalEarnings: (match['total_earnings'] as num?)?.toDouble() ?? 0.0,
-          createdAt: DateTime.tryParse(match['created_at'] ?? '') ?? DateTime.now(),
-          updatedAt: DateTime.tryParse(match['updated_at'] ?? '') ?? DateTime.now(),
+      // First try to get from Supabase database
+      try {
+        final response = await _client
+            .from('drivers')
+            .select()
+            .eq('id', driverId)
+            .maybeSingle();
+            
+        if (response != null) {
+          return Driver(
+            id: response['id'] ?? driverId,
+            email: response['email'] ?? '',
+            name: response['name'] ?? '',
+            phone: response['phone'] ?? '',
+            profileImage: response['profile_image'],
+            vehicleType: response['vehicle_type'],
+            vehicleNumber: response['vehicle_number'],
+            licenseNumber: response['license_number'],
+            vehicleModel: response['vehicle_model'],
+            vehicleColor: response['vehicle_color'],
+            licenseExpiry: response['license_expiry'],
+            insuranceNumber: response['insurance_number'],
+            insuranceExpiry: response['insurance_expiry'],
+            isOnline: response['is_online'] ?? false,
+            isAvailable: response['is_available'] ?? false,
+            rating: (response['rating'] as num?)?.toDouble() ?? 5.0,
+            totalRides: (response['total_rides'] as num?)?.toInt() ?? 0,
+            totalEarnings: (response['total_earnings'] as num?)?.toDouble() ?? 0.0,
+            createdAt: DateTime.tryParse(response['created_at'] ?? '') ?? DateTime.now(),
+            updatedAt: DateTime.tryParse(response['updated_at'] ?? '') ?? DateTime.now(),
+          );
+        }
+      } catch (supabaseError) {
+        // If Supabase fails, continue to backend API fallback
+        dev.log('Supabase query failed: $supabaseError', name: 'SupabaseService');
+      }
+      
+      // Fallback: Try to find in active drivers from backend API
+      try {
+        final drivers = await ApiService.getActiveDrivers();
+        final match = drivers.cast<Map>().firstWhere(
+          (d) => (d['id'] ?? d['driver_id']) == driverId,
+          orElse: () => {},
         );
+        if (match.isNotEmpty) {
+          return Driver(
+            id: (match['id'] ?? match['driver_id']) ?? driverId,
+            email: match['email'] ?? '',
+            name: match['name'] ?? '',
+            phone: match['phone'] ?? '',
+            profileImage: match['profile_image'],
+            vehicleType: match['vehicle_type'],
+            vehicleNumber: match['vehicle_number'],
+            licenseNumber: match['license_number'],
+            isOnline: (match['is_online'] ?? match['online'] ?? false) == true,
+            rating: (match['rating'] as num?)?.toDouble() ?? 5.0,
+            totalRides: (match['total_rides'] as num?)?.toInt() ?? 0,
+            totalEarnings: (match['total_earnings'] as num?)?.toDouble() ?? 0.0,
+            createdAt: DateTime.tryParse(match['created_at'] ?? '') ?? DateTime.now(),
+            updatedAt: DateTime.tryParse(match['updated_at'] ?? '') ?? DateTime.now(),
+          );
+        }
+      } catch (apiError) {
+        // Backend API failed, continue to auth metadata fallback
+        dev.log('Backend API failed: $apiError', name: 'SupabaseService');
       }
 
-      // If not active, build minimal profile from auth metadata
+      // Final fallback: Build minimal profile from auth metadata
       final user = _client.auth.currentUser;
-      return Driver(
-        id: driverId,
-        email: user?.email ?? '',
-        name: (user?.userMetadata?['name'] as String?) ?? '',
-        phone: (user?.userMetadata?['phone'] as String?) ?? '',
-        isOnline: false,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      if (user != null) {
+        return Driver(
+          id: driverId,
+          email: user.email ?? '',
+          name: (user.userMetadata?['name'] as String?) ?? '',
+          phone: (user.userMetadata?['phone'] as String?) ?? '',
+          isOnline: false,
+          isAvailable: false,
+          rating: 5.0,
+          totalRides: 0,
+          totalEarnings: 0.0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+      }
+      
+      return null;
     } catch (e) {
       throw Exception('Failed to get driver profile: $e');
     }
@@ -230,8 +281,32 @@ class SupabaseService {
     String? licenseNumber,
     bool? isOnline,
   }) async {
-    // Writes are handled by backend via Socket.IO only per current API contract
-    return;
+    try {
+      final updateData = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      
+      if (name != null) updateData['name'] = name;
+      if (phone != null) updateData['phone'] = phone;
+      if (profileImage != null) updateData['profile_image'] = profileImage;
+      if (vehicleType != null) updateData['vehicle_type'] = vehicleType;
+      if (vehicleNumber != null) updateData['vehicle_number'] = vehicleNumber;
+      if (licenseNumber != null) updateData['license_number'] = licenseNumber;
+      if (isOnline != null) {
+        updateData['is_online'] = isOnline;
+        updateData['is_available'] = isOnline; // When online, driver is available
+      }
+      
+      await _client
+          .from('drivers')
+          .update(updateData)
+          .eq('id', driverId);
+          
+      dev.log('Driver profile updated in Supabase: $driverId', name: 'SupabaseService');
+    } catch (e) {
+      dev.log('Failed to update driver profile in Supabase: $e', name: 'SupabaseService');
+      throw Exception('Failed to update driver profile: $e');
+    }
   }
 
   // Ride Methods

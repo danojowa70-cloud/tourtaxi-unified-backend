@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'constants/app_constants.dart';
-import 'firebase_options.dart';
 import 'services/fcm_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';

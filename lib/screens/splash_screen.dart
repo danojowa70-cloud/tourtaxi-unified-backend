@@ -72,103 +72,121 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(AppConstants.backgroundColorValue),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // App Logo/Icon placeholder
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: const Color(AppConstants.primaryColorValue),
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(AppConstants.primaryColorValue).withValues(alpha: 0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+    return Scaffold(
+      backgroundColor: Colors.black, // Uber-style black background
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Top spacer to push content to center
+              const Spacer(flex: 2),
+              
+              // TourTaxi Logo (Square)
+              Container(
+                width: MediaQuery.of(context).size.width * 0.6, // 60% of screen width
+                height: MediaQuery.of(context).size.width * 0.6, // Square aspect ratio
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    color: Colors.white, // White background for logo
+                    padding: const EdgeInsets.all(20),
+                    child: Image.asset(
+                      'assets/images/tourtaxi_logo_new.jpg',
+                      fit: BoxFit.contain,
+                    ),
                   ),
+                ),
+              )
+                  .animate()
+                  .scale(
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.elasticOut,
+                  )
+                  .fadeIn(
+                    duration: const Duration(milliseconds: 600),
+                  ),
+              
+              // Middle spacer
+              const Spacer(flex: 1),
+              
+              // Loading indicator with text
+              Column(
+                children: [
+                  // Loading spinner
+                  const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      .animate()
+                      .fadeIn(
+                        delay: const Duration(milliseconds: 1000),
+                        duration: const Duration(milliseconds: 400),
+                      ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Loading text
+                  const Text(
+                    'Starting your journey...',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      letterSpacing: 0.5,
+                    ),
+                  )
+                      .animate()
+                      .fadeIn(
+                        delay: const Duration(milliseconds: 1200),
+                        duration: const Duration(milliseconds: 400),
+                      )
+                      .slideY(
+                        begin: 0.3,
+                        end: 0,
+                        delay: const Duration(milliseconds: 1200),
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.easeOut,
+                      ),
                 ],
               ),
-              child: const Icon(
-                CupertinoIcons.car_fill,
-                size: 60,
-                color: Colors.white,
-              ),
-            )
-                .animate()
-                .scale(
-                  duration: AppConstants.mediumAnimation,
-                  curve: Curves.elasticOut,
+              
+              // Bottom spacer
+              const Spacer(flex: 1),
+              
+              // App version at bottom (optional)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 30),
+                child: const Text(
+                  'v${AppConstants.appVersion}',
+                  style: TextStyle(
+                    color: Colors.white30,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w300,
+                  ),
                 )
-                .fadeIn(duration: AppConstants.shortAnimation),
-            
-            const SizedBox(height: AppConstants.spacingXLarge),
-            
-            // App Name with animation
-            const Text(
-              'TOURTAXI',
-              style: TextStyle(
-                fontSize: AppConstants.fontSizeXXLarge,
-                fontWeight: FontWeight.bold,
-                color: Color(AppConstants.textColorValue),
-                letterSpacing: 2.0,
+                    .animate()
+                    .fadeIn(
+                      delay: const Duration(milliseconds: 1500),
+                      duration: const Duration(milliseconds: 300),
+                    ),
               ),
-            )
-                .animate()
-                .fadeIn(
-                  delay: const Duration(milliseconds: 500),
-                  duration: AppConstants.mediumAnimation,
-                )
-                .slideY(
-                  begin: 0.3,
-                  end: 0,
-                  delay: const Duration(milliseconds: 500),
-                  duration: AppConstants.mediumAnimation,
-                  curve: Curves.easeOut,
-                ),
-            
-            const SizedBox(height: AppConstants.spacingSmall),
-            
-            // Driver subtitle
-            const Text(
-              'DRIVER',
-              style: TextStyle(
-                fontSize: AppConstants.fontSizeLarge,
-                fontWeight: FontWeight.w600,
-                color: Color(AppConstants.secondaryTextColorValue),
-                letterSpacing: 1.5,
-              ),
-            )
-                .animate()
-                .fadeIn(
-                  delay: const Duration(milliseconds: 800),
-                  duration: AppConstants.mediumAnimation,
-                )
-                .slideY(
-                  begin: 0.3,
-                  end: 0,
-                  delay: const Duration(milliseconds: 800),
-                  duration: AppConstants.mediumAnimation,
-                  curve: Curves.easeOut,
-                ),
-            
-            const SizedBox(height: AppConstants.spacingXLarge * 2),
-            
-            // Loading indicator
-            const CupertinoActivityIndicator(
-              radius: 15,
-              color: Color(AppConstants.primaryColorValue),
-            )
-                .animate()
-                .fadeIn(
-                  delay: const Duration(milliseconds: 1200),
-                  duration: AppConstants.shortAnimation,
-                ),
-          ],
+            ],
+          ),
         ),
       ),
     );

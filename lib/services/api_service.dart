@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'package:http/http.dart' as http;
 import '../constants/app_constants.dart';
 
@@ -65,8 +66,8 @@ class ApiService {
   }) async {
     try {
       final uri = Uri.parse('$_base/driver/status');
-      print('📡 API URL: $uri');
-      print('📤 Request payload: {"driver_id": "$driverId", "is_online": $isOnline, "is_available": $isOnline}');
+      dev.log('API URL: $uri', name: 'ApiService');
+      dev.log('Request payload: driver_id=$driverId, is_online=$isOnline, is_available=$isOnline', name: 'ApiService');
       
       final response = await http.post(
         uri,
@@ -78,21 +79,17 @@ class ApiService {
         }),
       );
       
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response body: ${response.body}');
+      dev.log('Response status: ${response.statusCode}', name: 'ApiService');
+      dev.log('Response body: ${response.body}', name: 'ApiService');
       
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
         final data = responseBody['data'] as Map<String, dynamic>?;
         
         if (data != null) {
-          print('🔍 Backend response data:');
-          print('   driver_id: ${data['driver_id']}');
-          print('   is_online: ${data['is_online']}');
-          print('   is_available: ${data['is_available']}');
-          print('   updated_at: ${data['updated_at']}');
+          dev.log('Backend response - driver_id: ${data['driver_id']}, is_online: ${data['is_online']}, is_available: ${data['is_available']}, updated_at: ${data['updated_at']}', name: 'ApiService');
         } else {
-          print('⚠️  No data returned in response');
+          dev.log('No data returned in response', name: 'ApiService');
         }
         
         return true;
@@ -100,7 +97,7 @@ class ApiService {
       
       return false;
     } catch (e) {
-      print('❌ API Error: $e');
+      dev.log('API Error: $e', name: 'ApiService');
       throw Exception('Failed to update driver status: $e');
     }
   }
@@ -112,8 +109,8 @@ class ApiService {
   }) async {
     try {
       final uri = Uri.parse('$_base/driver/fcm-token');
-      print('📡 API URL: $uri');
-      print('📤 Request payload: {"driver_id": "$driverId", "fcm_token": "${fcmToken.substring(0, 20)}..."}');
+      dev.log('FCM Token API URL: $uri', name: 'ApiService');
+      dev.log('FCM Token request - driver_id: $driverId, token: ${fcmToken.substring(0, 20)}...', name: 'ApiService');
       
       final response = await http.post(
         uri,
@@ -124,8 +121,8 @@ class ApiService {
         }),
       );
       
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response body: ${response.body}');
+      dev.log('FCM Token response status: ${response.statusCode}', name: 'ApiService');
+      dev.log('FCM Token response body: ${response.body}', name: 'ApiService');
       
       if (response.statusCode == 200) {
         return true;
@@ -133,7 +130,7 @@ class ApiService {
       
       return false;
     } catch (e) {
-      print('❌ FCM Token API Error: $e');
+      dev.log('FCM Token API Error: $e', name: 'ApiService');
       throw Exception('Failed to update FCM token: $e');
     }
   }
