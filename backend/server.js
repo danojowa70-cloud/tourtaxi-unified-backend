@@ -422,7 +422,7 @@ io.on('connection', (socket) => {
   // DRIVER CONNECTION & AUTHENTICATION
   // ========================================
   
-  socket.on('connect_driver', (data) => {
+  socket.on('connect_driver', async (data) => {
     try {
       console.log(`🚗 Driver connecting: ${data.driver_id}`);
       
@@ -454,6 +454,12 @@ io.on('connection', (socket) => {
 
       activeDrivers.set(data.driver_id, driverInfo);
 
+      // CRITICAL: Join driver to Socket.IO rooms for receiving ride requests
+      socket.join(`driver_${data.driver_id}`);
+      socket.join('available_drivers');
+      socket.join('online_drivers');
+      console.log(`🔗 Driver ${data.driver_id} joined socket rooms`);
+
       // Save driver to database
       await saveDriverToDatabase(driverInfo);
 
@@ -461,11 +467,12 @@ io.on('connection', (socket) => {
       driverSessions.set(socket.id, data.driver_id);
       socket.driverId = data.driver_id;
 
-      // Notify driver of successful connection
+      // Notify driver of successful connection with debug info
       socket.emit('driver_connected', {
         status: 'success',
         message: 'Successfully connected to TourTaxi',
         driver_id: data.driver_id,
+        socket_rooms: Array.from(socket.rooms),
         timestamp: new Date().toISOString()
       });
 
@@ -480,11 +487,11 @@ io.on('connection', (socket) => {
         timestamp: new Date().toISOString()
       });
 
-      console.log(`✅ Driver ${data.driver_id} connected successfully`);
+      console.log(`✅ Driver ${data.driver_id} connected successfully and joined rooms: ${Array.from(socket.rooms)}`);
       
     } catch (error) {
       console.error('Error connecting driver:', error);
-      socket.emit('error', { message: 'Failed to connect driver' });
+      socket.emit('error', { message: 'Failed to connect driver', error: error.message });
     }
   });
 
@@ -492,7 +499,7 @@ io.on('connection', (socket) => {
   // LOCATION TRACKING
   // ========================================
   
-  socket.on('location_update', (data) => {
+  socket.on('location_update', async (data) => {
     try {
       const driverId = socket.driverId;
       if (!driverId || !activeDrivers.has(driverId)) {
@@ -628,8 +635,14 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Send ride request to nearby drivers
+      // Send ride request to nearby drivers using multiple delivery methods for reliability
       let requestsSent = 0;
+      const driverNotificationData = {
+        ride_data: ride,
+        requesting_passenger: data.passenger_name,
+        timestamp: new Date().toISOString()
+      };
+
       nearbyDrivers.forEach(driverInfo => {
         const driver = activeDrivers.get(driverInfo.driver_id);
         if (driver && driver.isAvailable) {
@@ -637,16 +650,45 @@ io.on('connection', (socket) => {
           const driverDistance = driverInfo.distance;
           const estimatedArrival = Math.round(driverDistance * 2); // Rough estimate: 2 minutes per km
           
-          io.to(driver.socketId).emit('ride_request', {
-            ...ride,
+          const driverSpecificData = {
+            ...driverNotificationData.ride_data,
             estimated_arrival: `${estimatedArrival} minutes`,
-            driver_distance: driverDistance.toFixed(2)
+            distance_km: driverDistance.toFixed(2),
+            driver_name: driver.name,
+            driver_id: driverInfo.driver_id
+          };
+          
+          // Method 1: Direct socket emission to driver
+          console.log(`📱 Sending ride request to driver ${driverInfo.driver_id} via socket ${driver.socketId}`);
+          io.to(driver.socketId).emit('ride_request', {
+            ride_data: driverSpecificData,
+            distance_km: driverDistance.toFixed(2),
+            driver_name: driver.name
           });
+          
+          // Method 2: Room-based emission as backup
+          io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', {
+            ride_data: driverSpecificData,
+            distance_km: driverDistance.toFixed(2),
+            driver_name: driver.name
+          });
+          
           requestsSent++;
+          console.log(`✅ Ride request sent to driver ${driverInfo.driver_id} (${driver.name}) - Distance: ${driverDistance.toFixed(2)}km`);
+        } else {
+          console.log(`❌ Driver ${driverInfo.driver_id} not available or not found in activeDrivers`);
         }
       });
 
-      console.log(`📤 Ride request sent to ${requestsSent} drivers`);
+      console.log(`📤 Ride request sent to ${requestsSent} drivers out of ${nearbyDrivers.length} nearby`);
+
+      // Also broadcast to all available drivers in the area as a fallback
+      io.to('available_drivers').emit('ride_request_broadcast', {
+        ride_data: ride,
+        pickup_area: `${ride.pickup_address}`,
+        max_distance_km: 5.0,
+        timestamp: new Date().toISOString()
+      });
 
       // Set timeout for ride request (5 minutes)
       setTimeout(() => {
@@ -676,7 +718,7 @@ io.on('connection', (socket) => {
   // RIDE ACCEPTANCE
   // ========================================
   
-  socket.on('ride_accept', (data) => {
+  socket.on('ride_accept', async (data) => {
     try {
       console.log(`✅ Driver ${data.driver_id} accepting ride ${data.ride_id}`);
       
@@ -902,7 +944,7 @@ io.on('connection', (socket) => {
   // RIDE COMPLETION
   // ========================================
   
-  socket.on('ride_complete', (data) => {
+  socket.on('ride_complete', async (data) => {
     try {
       console.log(`🏁 Driver ${data.driver_id} completing ride ${data.ride_id}`);
       

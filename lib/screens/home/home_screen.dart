@@ -9,6 +9,7 @@ import '../../services/location_service.dart';
 import '../../services/socket_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/api_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../models/driver_model.dart';
 import '../../models/ride_model.dart';
 import '../../widgets/online_toggle.dart';
@@ -70,56 +71,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // Get driver profile
+      // Get driver profile - this is critical, so show progress
       _driver = await SupabaseService.getDriverProfile(user.id);
       if (_driver == null) {
         _navigateToLogin();
         return;
       }
 
-      // Check location permissions and services
-      await _checkLocationServices();
-      
-      // Get current location (with fallback)
-      await _getCurrentLocation();
-
-      // Initialize socket service
-      await SocketService.initialize();
-
-      // Listen to location updates with error handling
-      LocationService.locationStream.listen(
-        (position) {
-          _updateLocation(position);
-        },
-        onError: (error) {
-          dev.log('Location stream error: $error', name: 'HomeScreen');
-          setState(() {
-            _locationError = 'Location tracking error: $error';
-          });
-          // Try to restart location tracking
-          Future.delayed(Duration(seconds: 5), () {
-            if (mounted && _hasLocationPermission && _isLocationServiceEnabled) {
-              _refreshLocation();
-            }
-          });
-        },
-      );
-
-      // Listen to ride requests
-      SocketService.rideRequestStream.listen((ride) {
-        _showRideRequestPopup(ride);
-      });
-
-      // Start periodic location refresh every 30 seconds for accuracy
-      _locationRefreshTimer = Timer.periodic(Duration(seconds: 30), (timer) {
-        if (mounted && _hasLocationPermission && _isLocationServiceEnabled) {
-          _refreshLocation();
-        }
-      });
-
+      // Show UI immediately after getting driver profile
       setState(() {
         _isLoading = false;
+        _currentLocation = _defaultLocation; // Always start with fallback location
       });
+      
+      // Start all service initializations asynchronously (non-blocking)
+      _initializeServicesAsync();
       
       dev.log('App initialization complete', name: 'HomeScreen');
     } catch (e) {
@@ -130,6 +96,136 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Use fallback location to show map
         _currentLocation = _defaultLocation;
       });
+    }
+  }
+  
+  Future<void> _initializeServicesAsync() async {
+    try {
+      // Start all services in parallel without blocking UI
+      final futures = [
+        _checkLocationServices(),
+        ConnectivityService.initialize(),
+        SocketService.initialize(),
+      ];
+      
+      // Wait for basic services with timeout
+      await Future.wait(futures).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          dev.log('Service initialization timed out, continuing with defaults', name: 'HomeScreen');
+          return <void>[];
+        },
+      );
+      
+      // Try to get actual location with timeout
+      _getCurrentLocation().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          dev.log('Location fetch timed out, using default location', name: 'HomeScreen');
+          if (mounted) {
+            setState(() {
+              _locationError = 'Location unavailable - using default';
+            });
+          }
+        },
+      ).catchError((e) {
+        dev.log('Location error: $e', name: 'HomeScreen');
+        if (mounted) {
+          setState(() {
+            _locationError = 'Location error: ${e.toString()}';
+          });
+        }
+      });
+      
+      // Check connectivity
+      ConnectivityService.checkConnectivity().then((hasInternet) {
+        if (!hasInternet && mounted) {
+          setState(() {
+            _locationError = 'No internet connection';
+          });
+        }
+      }).catchError((e) {
+        dev.log('Connectivity check error: $e', name: 'HomeScreen');
+      });
+      
+      // Set up listeners (non-blocking)
+      _setupListeners();
+      
+    } catch (e) {
+      dev.log('Error in async service initialization: $e', name: 'HomeScreen');
+    }
+  }
+  
+  void _setupListeners() {
+    try {
+      // Listen to location updates with error handling
+      LocationService.locationStream.listen(
+        (position) {
+          _updateLocation(position);
+        },
+        onError: (error) {
+          dev.log('Location stream error: $error', name: 'HomeScreen');
+          if (mounted) {
+            setState(() {
+              _locationError = 'Location tracking error: $error';
+            });
+          }
+          // Try to restart location tracking
+          Future.delayed(const Duration(seconds: 5), () {
+            if (mounted && _hasLocationPermission && _isLocationServiceEnabled) {
+              _refreshLocation();
+            }
+          });
+        },
+      );
+
+      // Listen to connectivity changes
+      ConnectivityService.connectionStatusStream.listen((hasConnection) {
+        if (mounted) {
+          setState(() {
+            if (!hasConnection) {
+              _locationError = 'No internet connection';
+              _isOnline = false; // Force offline when no internet
+            } else if (_locationError == 'No internet connection') {
+              _locationError = null; // Clear error when connection restored
+            }
+          });
+        }
+      });
+      
+      // Listen to ride requests with comprehensive debugging
+      SocketService.rideRequestStream.listen(
+        (ride) {
+          dev.log('=== RIDE REQUEST RECEIVED IN HOME SCREEN ===', name: 'HomeScreen');
+          dev.log('Ride ID: ${ride.id}', name: 'HomeScreen');
+          dev.log('Passenger: ${ride.passengerName}', name: 'HomeScreen');
+          dev.log('Pickup: ${ride.pickupAddress}', name: 'HomeScreen');
+          dev.log('Destination: ${ride.destinationAddress}', name: 'HomeScreen');
+          dev.log('Status: ${ride.status}', name: 'HomeScreen');
+          dev.log('Driver is online: $_isOnline', name: 'HomeScreen');
+          dev.log('Current ride: $_currentRide', name: 'HomeScreen');
+          
+          if (_isOnline && _currentRide == null) {
+            dev.log('Showing ride request popup...', name: 'HomeScreen');
+            _showRideRequestPopup(ride);
+          } else {
+            dev.log('NOT showing popup - Online: $_isOnline, Current ride: $_currentRide', name: 'HomeScreen');
+          }
+        },
+        onError: (error) {
+          dev.log('ERROR in ride request stream: $error', name: 'HomeScreen');
+        },
+      );
+
+      // Start periodic location refresh every 30 seconds for accuracy
+      _locationRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+        if (mounted && _hasLocationPermission && _isLocationServiceEnabled) {
+          _refreshLocation();
+        }
+      });
+      
+    } catch (e) {
+      dev.log('Error setting up listeners: $e', name: 'HomeScreen');
     }
   }
 
@@ -213,6 +309,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           driverId: _driver!.id,
           latitude: position.latitude,
           longitude: position.longitude,
+          heading: position.heading.isNaN ? null : position.heading,
         );
       }
 
@@ -244,6 +341,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     
+    // Ensure services are initialized if going online
+    if (isOnline) {
+      dev.log('Ensuring services are ready for going online...', name: 'HomeScreen');
+      
+      // Check/initialize location services
+      if (!_hasLocationPermission || !_isLocationServiceEnabled) {
+        dev.log('Location services not ready, initializing...', name: 'HomeScreen');
+        await _checkLocationServices();
+        
+        if (!_hasLocationPermission) {
+          _showErrorSnackBar('Location permission is required to go online.');
+          return;
+        }
+        
+        if (!_isLocationServiceEnabled) {
+          _showErrorSnackBar('Please enable location services to go online.');
+          return;
+        }
+      }
+      
+      // Ensure we have a location (try to get it if we don't)
+      if (_currentLocation == null || _currentLocation == _defaultLocation) {
+        dev.log('Getting actual location before going online...', name: 'HomeScreen');
+        _showErrorSnackBar('Getting your location...');
+        
+        try {
+          await _getCurrentLocation().timeout(const Duration(seconds: 10));
+        } catch (e) {
+          dev.log('Failed to get location: $e', name: 'HomeScreen');
+          _showErrorSnackBar('Unable to get your location. Using default location.');
+          // Continue with default location
+        }
+      }
+    }
+    
     dev.log('Driver loaded - ID: ${_driver!.id}, Name: ${_driver!.name}, Email: ${_driver!.email}', name: 'HomeScreen');
     
     // Check location availability for going online
@@ -253,22 +385,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     
-    // Check socket connection for going online
-    if (isOnline && !SocketService.isConnected) {
-      dev.log('WARNING: Socket not connected, attempting to connect...', name: 'HomeScreen');
+    // Check internet connectivity first
+    if (isOnline) {
+      dev.log('Checking internet connectivity before going online', name: 'HomeScreen');
+      
       try {
-        await SocketService.connect();
-        // Give a moment for connection to establish
-        await Future.delayed(Duration(seconds: 2));
-        if (!SocketService.isConnected) {
-          dev.log('ERROR: Socket connection failed', name: 'HomeScreen');
-          _showErrorSnackBar('Connection failed. Please check your internet and try again.');
+        // Ensure ConnectivityService is initialized
+        await ConnectivityService.initialize().timeout(const Duration(seconds: 5));
+        
+        // Check basic connectivity (not server reachability) to avoid timeout issues
+        final hasBasicInternet = await ConnectivityService.hasInternetConnection();
+        
+        if (!hasBasicInternet) {
+          dev.log('ERROR: No basic internet connection available', name: 'HomeScreen');
+          _showErrorSnackBar('No internet connection. Please check your network and try again.');
           return;
         }
+        
+        dev.log('Basic internet connectivity confirmed', name: 'HomeScreen');
       } catch (e) {
-        dev.log('ERROR: Socket connection error: $e', name: 'HomeScreen');
-        _showErrorSnackBar('Connection error. Please try again.');
-        return;
+        dev.log('Connectivity check failed: $e', name: 'HomeScreen');
+        // Don't block the toggle for connectivity issues - let it proceed
+        dev.log('Proceeding with toggle despite connectivity check failure', name: 'HomeScreen');
+      }
+      
+      // Check socket connection for going online (non-blocking approach)
+      try {
+        // Ensure SocketService is initialized
+        await SocketService.initialize().timeout(const Duration(seconds: 3));
+        
+        if (!SocketService.isConnected) {
+          dev.log('WARNING: Socket not connected, will attempt to connect during API call...', name: 'HomeScreen');
+          // Don't block the toggle - let it proceed and handle connection during API call
+        } else {
+          dev.log('Socket already connected', name: 'HomeScreen');
+        }
+      } catch (e) {
+        dev.log('Socket initialization warning: $e - proceeding with toggle', name: 'HomeScreen');
+        // Don't block the toggle for socket issues - the API call will handle connectivity
       }
     }
     
@@ -320,6 +474,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             totalEarnings: _driver!.totalEarnings,
             latitude: _currentLocation!.latitude,
             longitude: _currentLocation!.longitude,
+            heading: null, // No heading available during initial connect
           );
           dev.log('Step 2a Complete: Driver connected to socket', name: 'HomeScreen');
         } else {
@@ -331,6 +486,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await LocationService.startLocationTracking();
         dev.log('Step 2b Complete: Location tracking started', name: 'HomeScreen');
 
+        // Ensure driver is marked as available after going online
+        dev.log('Step 2c: Setting driver as available', name: 'HomeScreen');
+        await SocketService.setDriverAvailable(driverId: _driver!.id);
+        dev.log('Step 2c Complete: Driver set as available', name: 'HomeScreen');
+        
         dev.log('SUCCESS: Driver is now ONLINE - database and socket updated', name: 'HomeScreen');
         _showSuccessSnackBar('You are now online and ready to receive ride requests!');
       } else {
@@ -444,12 +604,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  // TEMPORARY: Debug method to test ride request popup
+  void _debugTestRideRequest() {
+    dev.log('=== DEBUG: Testing ride request popup ===', name: 'HomeScreen');
+    if (_currentLocation != null) {
+      final testRide = Ride(
+        id: 'test_${DateTime.now().millisecondsSinceEpoch}',
+        driverId: _driver?.id ?? 'test_driver',
+        passengerId: 'test_passenger',
+        passengerName: 'Test Passenger',
+        passengerPhone: '+1234567890',
+        pickupLatitude: _currentLocation!.latitude + 0.001,
+        pickupLongitude: _currentLocation!.longitude + 0.001,
+        pickupAddress: 'Test Pickup Location',
+        destinationLatitude: _currentLocation!.latitude + 0.005,
+        destinationLongitude: _currentLocation!.longitude + 0.005,
+        destinationAddress: 'Test Destination',
+        distance: 2.5,
+        duration: 10.0,
+        fare: 15.0,
+        status: RideStatus.requested,
+        requestedAt: DateTime.now(),
+      );
+      _showRideRequestPopup(testRide);
+    } else {
+      _showErrorSnackBar('Location not available for test');
+    }
+  }
+
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _locationRefreshTimer?.cancel();
     LocationService.dispose();
     SocketService.dispose();
+    ConnectivityService.dispose();
     super.dispose();
   }
 
@@ -674,14 +864,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      floatingActionButton: _locationError != null
-          ? FloatingActionButton(
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_locationError != null)
+            FloatingActionButton(
+              heroTag: "location",
               onPressed: _refreshLocation,
               backgroundColor: const Color(AppConstants.primaryColorValue),
               tooltip: 'Refresh Location',
               child: const Icon(Icons.my_location, color: Colors.white),
-            )
-          : null,
+            ),
+          if (_locationError != null) const SizedBox(height: 10),
+          // TEMPORARY: Debug button to test ride request popup
+          FloatingActionButton(
+            heroTag: "debug",
+            onPressed: _debugTestRideRequest,
+            backgroundColor: Colors.orange,
+            tooltip: 'Test Ride Request',
+            child: const Icon(Icons.bug_report, color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 
