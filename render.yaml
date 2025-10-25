@@ -12,3 +12,25 @@ services:
         value: 10000
       - key: CORS_ORIGIN
         value: '*'
+      - key: SUPABASE_URL
+        value: https://vojjpvxhpofudvpexrjb.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvampwdnhocG9mdWR2cGV4cmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0MjQ3NzIsImV4cCI6MjA3NTAwMDc3Mn0.AYgP9ww5Lg_VqfqcN_zN3kf4j-otQbAgbYKlQIbE3yc
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvampwdnhocG9mdWR2cGV4cmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0MjQ3NzIsImV4cCI6MjA3NTAwMDc3Mn0.AYgP9ww5Lg_VqfqcN_zN3kf4j-otQbAgbYKlQIbE3yc
+      - key: GOOGLE_MAPS_API_KEY
+        value: AIzaSyBRYPKaXlRhpzoAmM5-KrS2JaNDxAX_phw
+      - key: BASE_FARE
+        value: '3.00'
+      - key: PER_KM_RATE
+        value: '1.80'
+      - key: PER_MINUTE_RATE
+        value: '0.30'
+      - key: MINIMUM_FARE
+        value: '8.00'
+      - key: COMMISSION_RATE
+        value: '0.15'
+      - key: DEFAULT_RIDE_RADIUS_KM
+        value: '5.0'
+      - key: RIDE_REQUEST_TIMEOUT_MS
+        value: '300000'
