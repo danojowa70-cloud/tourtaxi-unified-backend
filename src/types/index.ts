@@ -125,7 +125,7 @@ export const RideRequestSchema = z.object({
   distance: z.number().optional(),
   duration: z.number().optional(),
   fare: z.number().or(z.string()).optional(),
-  status: z.string().optional(),
+  status: RideStatusSchema.optional(),
   requested_at: z.string().optional(),
   
   // Optional notes

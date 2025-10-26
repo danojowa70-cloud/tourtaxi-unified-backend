@@ -8,6 +8,8 @@ import {
   RideRequest,
   RideRequestSchema,
   Ride,
+  RideStatus,
+  RideStatusSchema,
   ClientToServerEvents,
   ServerToClientEvents
 } from '../types/index';
@@ -155,6 +157,10 @@ export function registerPassengerHandlers(
           : validatedRideData.fare;
       }
       
+      // Normalize and validate status to match RideStatus type
+      const statusParsed = RideStatusSchema.safeParse(validatedRideData.status);
+      const rideStatus: RideStatus = statusParsed.success ? statusParsed.data : 'requested';
+
       // Create ride object
       const ride: Ride = {
         ride_id: rideId,
@@ -175,7 +181,7 @@ export function registerPassengerHandlers(
         fare: fareValue,
         route_polyline: routeInfo ? routeInfo.polyline : null,
         route_steps: routeInfo ? routeInfo.steps : null,
-        status: validatedRideData.status || 'requested',
+        status: rideStatus,
         notes: validatedRideData.notes || null,
         requested_at: validatedRideData.requested_at || new Date().toISOString(),
         driver_id: null,
