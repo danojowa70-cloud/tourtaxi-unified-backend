@@ -230,6 +230,7 @@ export interface ServerToClientEvents {
   ride_driver_location: (data: { ride_id: string; driver_id: string; latitude: number; longitude: number; timestamp: string }) => void;
   ride_room_joined: (data: { ride_id: string; members: number }) => void;
   no_drivers_available: (data: { ride_id: string; message: string; timestamp: string }) => void;
+  ride_request_failed: (data: { ride_id: string; message: string; error: string; timestamp: string }) => void;
   
   // Chat Events
   driver_message: (data: { ride_id: string; driver_id: string; message_text: string; timestamp: string }) => void;
