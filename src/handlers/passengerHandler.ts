@@ -127,8 +127,8 @@ export function registerPassengerHandlers(
       const validatedRideData = RideRequestSchema.parse(rideData);
       validateRideData(validatedRideData);
       
-      // Generate unique ride ID
-      const rideId = validatedRideData.ride_id || generateRideId();
+      // Generate a UUID ride ID (ignore client-provided ID to satisfy DB uuid type)
+      const rideId = generateRideId();
       
       // Calculate accurate distance and duration
       const distanceInfo = await calculateAccurateDistance(
