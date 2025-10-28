@@ -302,14 +302,21 @@ export function registerPassengerHandlers(
           
           try {
             // TRIPLE APPROACH: Three delivery methods for maximum reliability
+            // Emit BOTH legacy ('ride:request') and new ('ride_request') event names
             // Method 1: Driver-specific room
-            const roomDelivery = io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', driverSpecificPayload);
+            io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', driverSpecificPayload);
+            io.to(`driver_${driverInfo.driver_id}`).emit('ride:request', driverSpecificPayload);
             
             // Method 2: Direct socket ID
-            const socketDelivery = io.to(driver.socketId).emit('ride_request', driverSpecificPayload);
+            io.to(driver.socketId).emit('ride_request', driverSpecificPayload);
+            io.to(driver.socketId).emit('ride:request', driverSpecificPayload);
             
             // Method 3: Backup available_drivers room broadcast (will be filtered by driver)
-            const backupDelivery = io.to('available_drivers').emit('ride_request', {
+            io.to('available_drivers').emit('ride_request', {
+              ...driverSpecificPayload,
+              target_driver_id: driverInfo.driver_id // Add target for filtering
+            });
+            io.to('available_drivers').emit('ride:request', {
               ...driverSpecificPayload,
               target_driver_id: driverInfo.driver_id // Add target for filtering
             });
@@ -328,7 +335,7 @@ export function registerPassengerHandlers(
                 backup_room: 'available_drivers'
               },
               estimated_arrival: estimatedArrival
-            }, 'Ride request sent to driver via triple delivery');
+            }, 'Ride request sent to driver via triple delivery (dual event names)');
             
           } catch (emissionError) {
             logger.error({ 
@@ -347,6 +354,10 @@ export function registerPassengerHandlers(
         }
       }
       
+      // Global broadcast to ensure legacy driver apps receive it regardless of room membership
+      io.emit('ride_request', { ...rideRequestPayload, is_global_broadcast: true });
+      io.emit('ride:request', { ...rideRequestPayload, is_global_broadcast: true });
+      
       // Additional fallback: General broadcast to all available drivers if specific targeting had issues
       if (successfulDeliveries === 0 && nearbyDrivers.length > 0) {
         logger.warn({ 
@@ -355,6 +366,12 @@ export function registerPassengerHandlers(
         }, 'No specific deliveries successful, using general broadcast fallback');
         
         io.to('available_drivers').emit('ride_request', {
+          ...rideRequestPayload,
+          estimated_arrival: '5-10 minutes',
+          driver_distance: '0.0',
+          is_fallback_broadcast: true
+        });
+        io.to('available_drivers').emit('ride:request', {
           ...rideRequestPayload,
           estimated_arrival: '5-10 minutes',
           driver_distance: '0.0',
@@ -411,10 +428,16 @@ export function registerPassengerHandlers(
                 retry_attempt: 1
               };
               
-              // Triple delivery for retry
+              // Triple delivery for retry (emit both legacy and new event names)
               io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', retryPayload);
+              io.to(`driver_${driverInfo.driver_id}`).emit('ride:request', retryPayload);
               io.to(driver.socketId).emit('ride_request', retryPayload);
+              io.to(driver.socketId).emit('ride:request', retryPayload);
               io.to('available_drivers').emit('ride_request', {
+                ...retryPayload,
+                target_driver_id: driverInfo.driver_id
+              });
+              io.to('available_drivers').emit('ride:request', {
                 ...retryPayload,
                 target_driver_id: driverInfo.driver_id
               });

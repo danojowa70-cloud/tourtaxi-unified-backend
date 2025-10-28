@@ -217,7 +217,8 @@ export interface ServerToClientEvents {
   passenger_connected: (data: { status: string; passenger_id: string; timestamp: string }) => void;
   
   // Ride Events
-  ride_request: (data: Ride & { estimated_arrival: string; driver_distance: string; target_driver_id?: string; is_fallback_broadcast?: boolean; is_retry?: boolean; retry_attempt?: number }) => void;
+  ride_request: (data: Ride & { estimated_arrival: string; driver_distance: string; target_driver_id?: string; is_fallback_broadcast?: boolean; is_retry?: boolean; retry_attempt?: number; is_global_broadcast?: boolean }) => void;
+  'ride:request': (data: Ride & { estimated_arrival: string; driver_distance: string; target_driver_id?: string; is_fallback_broadcast?: boolean; is_retry?: boolean; retry_attempt?: number; is_global_broadcast?: boolean }) => void;
   ride_accepted: (data: any) => void;
   ride_accepted_confirmation: (data: any) => void;
   ride_rejected_confirmation: (data: { ride_id: string; status: string; message: string; timestamp: string }) => void;
