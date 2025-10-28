@@ -882,6 +882,11 @@ export function registerDriverHandlers(
       io.to(rideRoom).emit('ride_accepted', acceptedPayload);
       io.to(rideRoom).emit('ride_room_joined', { ride_id: rideId, members: 2 });
 
+      // Also broadcast globally to ensure passenger receives event even if not in room yet
+      io.emit('ride_accepted', { ...acceptedPayload, is_global_broadcast: true });
+      // Legacy compatibility event name
+      io.emit('ride_accept', { ...acceptedPayload, is_global_broadcast: true });
+
       // Notify driver of successful acceptance
       socket.emit('ride_accepted_confirmation', {
         ride_id: rideId,
