@@ -355,8 +355,18 @@ export function registerPassengerHandlers(
       }
       
       // Global broadcast to ensure legacy driver apps receive it regardless of room membership
-      io.emit('ride_request', { ...rideRequestPayload, is_global_broadcast: true });
-      io.emit('ride:request', { ...rideRequestPayload, is_global_broadcast: true });
+      io.emit('ride_request', { 
+        ...rideRequestPayload, 
+        estimated_arrival: '5-10 minutes', 
+        driver_distance: '0.0', 
+        is_global_broadcast: true 
+      });
+      io.emit('ride:request', { 
+        ...rideRequestPayload, 
+        estimated_arrival: '5-10 minutes', 
+        driver_distance: '0.0', 
+        is_global_broadcast: true 
+      });
       
       // Additional fallback: General broadcast to all available drivers if specific targeting had issues
       if (successfulDeliveries === 0 && nearbyDrivers.length > 0) {
