@@ -179,11 +179,16 @@ export async function saveRideToDatabase(rideData: Ride): Promise<any> {
         cancellation_reason: rideData.cancellation_reason
       });
 
-    if (error) throw error;
+    if (error) {
+      logger.error({ error, ride_id: rideData.ride_id }, 'Supabase error saving ride to database');
+      throw error;
+    }
+    
+    logger.info({ ride_id: rideData.ride_id }, 'Ride saved to database successfully');
     return data;
   } catch (error) {
-    logger.error({ error }, 'Error saving ride to database');
-    return null;
+    logger.error({ error, ride_id: rideData.ride_id }, 'Error saving ride to database');
+    throw error; // Re-throw so caller can handle it
   }
 }
 
@@ -195,16 +200,28 @@ export async function updateRideStatus(rideId: string, status: string, additiona
       ...additionalData
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('rides')
       .update(updateData)
-      .eq('id', rideId);
+      .eq('id', rideId)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      logger.error({ error, rideId }, 'Supabase error updating ride status');
+      throw error;
+    }
+    
+    // Check if any rows were actually updated
+    if (!data || data.length === 0) {
+      logger.error({ rideId, status }, 'No ride found with this ID to update');
+      throw new Error(`Ride ${rideId} not found in database`);
+    }
+    
+    logger.info({ rideId, status }, 'Ride status updated successfully in database');
     return true;
   } catch (error) {
-    logger.error({ error }, 'Error updating ride status');
-    return false;
+    logger.error({ error, rideId, status }, 'Error updating ride status');
+    throw error; // Re-throw so caller can handle it
   }
 }
 
@@ -727,24 +744,27 @@ export function registerDriverHandlers(
   
   socket.on('ride_accept', async (data) => {
     try {
-      logger.info({ driver_id: data.driver_id, ride_id: data.ride_id }, 'Driver accepting ride');
+      logger.info({ driver_id: data.driver_id, ride_id: data.ride_id, driver_details: data }, 'Driver accepting ride with full details');
       
       const driverId = data.driver_id;
       const rideId = data.ride_id;
       
       // Validate driver and ride
       if (!activeDrivers.has(driverId)) {
+        logger.error({ driverId }, 'Driver not found in activeDrivers map');
         socket.emit('error', { message: 'Driver not found' });
         return;
       }
       
       const ride = pendingRides.get(rideId);
       if (!ride) {
+        logger.error({ rideId, pendingRidesSize: pendingRides.size }, 'Ride not found in pendingRides map');
         socket.emit('error', { message: 'Ride not found or expired' });
         return;
       }
       
       if (ride.status !== 'requested') {
+        logger.error({ rideId, currentStatus: ride.status }, 'Ride already processed');
         socket.emit('error', { message: 'Ride already processed' });
         return;
       }
@@ -783,15 +803,28 @@ export function registerDriverHandlers(
       rideAssignments.set(rideId, driverId);
 
       // Update ride status in database
-      await updateRideStatus(rideId, 'accepted', {
-        driver_id: driverId,
-        accepted_at: ride.accepted_at,
-        driver_latitude: driver.latitude,
-        driver_longitude: driver.longitude,
-        driver_to_pickup_polyline: ride.driver_to_pickup_polyline,
-        driver_to_pickup_distance: ride.driver_to_pickup_distance,
-        driver_to_pickup_duration: ride.driver_to_pickup_duration
-      });
+      try {
+        await updateRideStatus(rideId, 'accepted', {
+          driver_id: driverId,
+          accepted_at: ride.accepted_at,
+          driver_latitude: driver.latitude,
+          driver_longitude: driver.longitude,
+          driver_to_pickup_polyline: ride.driver_to_pickup_polyline,
+          driver_to_pickup_distance: ride.driver_to_pickup_distance,
+          driver_to_pickup_duration: ride.driver_to_pickup_duration
+        });
+        logger.info({ rideId, driverId }, 'Database updated successfully');
+      } catch (dbError) {
+        logger.error({ dbError, rideId, driverId }, 'Failed to update ride in database');
+        socket.emit('error', { message: 'Failed to accept ride in database' });
+        // Rollback in-memory state
+        ride.status = 'requested';
+        ride.driver_id = null;
+        driver.isAvailable = true;
+        driver.currentRide = null;
+        rideAssignments.delete(rideId);
+        return;
+      }
 
       // Join both driver and passenger to a per-ride room
       const rideRoom = `ride_${rideId}`;

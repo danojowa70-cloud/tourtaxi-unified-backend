@@ -210,8 +210,26 @@ export function registerPassengerHandlers(
         distance: ride.distance_text
       });
 
-      // Save ride to database
-      await saveRideToDatabase(ride);
+      // Save ride to database - critical step, must succeed before proceeding
+      try {
+        await saveRideToDatabase(ride);
+        logger.info({ ride_id: rideId }, 'Ride successfully saved to database, proceeding with driver notifications');
+      } catch (dbError) {
+        logger.error({ error: dbError, ride_id: rideId }, 'Failed to save ride to database, aborting ride request');
+        
+        // Remove from in-memory store since DB save failed
+        pendingRides.delete(rideId);
+        
+        // Notify passenger of failure
+        socket.emit('ride_request_failed', {
+          ride_id: rideId,
+          message: 'Failed to create ride request. Please try again.',
+          error: 'DATABASE_ERROR',
+          timestamp: new Date().toISOString()
+        });
+        
+        return; // Stop processing
+      }
 
       // Find nearby available drivers
       const nearbyDrivers = await findNearbyDrivers(
