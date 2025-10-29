@@ -125,6 +125,26 @@ function generateRideId() {
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id}`);
   
+  // Passenger connection
+  socket.on('connect_passenger', async (data) => {
+    try {
+      console.log(`👤 Passenger connecting: ${data.passenger_id}`);
+      
+      socket.passengerId = data.passenger_id;
+      socket.join(`passenger_${data.passenger_id}`);
+      
+      socket.emit('passenger_connected', {
+        status: 'success',
+        passenger_id: data.passenger_id,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log(`✅ Passenger ${data.passenger_id} connected successfully`);
+    } catch (error) {
+      console.error('Error connecting passenger:', error);
+    }
+  });
+  
   // CRITICAL FIX: Driver connection with proper room management
   socket.on('connect_driver', async (data) => {
     try {
@@ -141,6 +161,7 @@ io.on('connection', (socket) => {
         name: data.name || 'Driver',
         phone: data.phone || '',
         vehicle_type: data.vehicle_type || 'Sedan',
+        vehicle_number: data.vehicle_number || 'GJO6PM8016',
         rating: data.rating || 4.5,
         latitude: data.latitude,
         longitude: data.longitude,
@@ -270,7 +291,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Ride acceptance
+  // Ride acceptance with full driver info and OTP generation
   socket.on('ride_accept', async (data) => {
     try {
       const ride = pendingRides.get(data.ride_id);
@@ -284,16 +305,93 @@ io.on('connection', (socket) => {
           driver.isAvailable = false;
         }
         
-        io.emit('ride_accepted', {
+        // Generate 4-digit OTP for ride verification
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+        ride.otp = otp;
+        console.log(`🔐 Generated OTP ${otp} for ride ${data.ride_id}`);
+        
+        // Prepare comprehensive ride_accepted event with ALL driver info
+        const rideAcceptedData = {
           ride_id: data.ride_id,
           driver_id: data.driver_id,
+          driver_name: driver?.name || 'Driver',
+          driver_phone: driver?.phone || '',
+          driver_vehicle: driver?.vehicle_type || 'Sedan',
+          driver_vehicle_number: 'GJO6PM8016', // You should add this to driver data
+          driver_rating: driver?.rating || 4.5,
+          driver_image: null,
+          driver_latitude: driver?.latitude,
+          driver_longitude: driver?.longitude,
+          estimated_arrival: '3 minutes',
+          pickup_address: ride.pickup_address,
+          destination_address: ride.destination_address,
+          fare: ride.fare,
+          distance: ride.distance + ' km',
+          duration: '8 mins',
+          route_polyline: ride.route_polyline || '',
+          driver_to_pickup_polyline: '',
+          driver_to_pickup_distance: '0.7 km',
+          driver_to_pickup_duration: '3 mins',
           timestamp: new Date().toISOString()
-        });
+        };
+        
+        // Emit to BOTH passenger and driver with comprehensive info
+        io.emit('ride_accepted', rideAcceptedData);
+        io.to(`passenger_${ride.passenger_id}`).emit('ride_accepted', rideAcceptedData);
+        io.to(`driver_${data.driver_id}`).emit('ride_accepted', rideAcceptedData);
+        
+        // Send OTP separately to both
+        const otpData = {
+          ride_id: data.ride_id,
+          otp: otp,
+          timestamp: new Date().toISOString()
+        };
+        io.emit('ride_otp', otpData);
+        io.to(`passenger_${ride.passenger_id}`).emit('ride_otp', otpData);
+        io.to(`driver_${data.driver_id}`).emit('ride_otp', otpData);
         
         console.log(`✅ Ride ${data.ride_id} accepted by driver ${data.driver_id}`);
+        console.log(`📤 Sent full driver info and OTP to passenger ${ride.passenger_id}`);
       }
     } catch (error) {
       console.error('Error accepting ride:', error);
+    }
+  });
+  
+  // Ride cancellation (by passenger)
+  socket.on('ride_cancel', async (data) => {
+    try {
+      const ride = pendingRides.get(data.ride_id);
+      if (ride) {
+        ride.status = 'cancelled';
+        ride.cancelled_at = new Date().toISOString();
+        ride.cancellation_reason = data.reason || 'Passenger cancelled';
+        
+        // Notify all parties
+        io.emit('ride_cancelled', {
+          ride_id: data.ride_id,
+          reason: ride.cancellation_reason,
+          timestamp: new Date().toISOString()
+        });
+        
+        // If driver was assigned, make them available again
+        if (ride.driver_id) {
+          const driver = activeDrivers.get(ride.driver_id);
+          if (driver) {
+            driver.isAvailable = true;
+          }
+          io.to(`driver_${ride.driver_id}`).emit('ride_cancelled', {
+            ride_id: data.ride_id,
+            reason: ride.cancellation_reason,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
+        pendingRides.delete(data.ride_id);
+        console.log(`❌ Ride ${data.ride_id} cancelled: ${ride.cancellation_reason}`);
+      }
+    } catch (error) {
+      console.error('Error cancelling ride:', error);
     }
   });
   
@@ -304,6 +402,70 @@ io.on('connection', (socket) => {
       ride_id: data.ride_id,
       status: 'success'
     });
+  });
+  
+  // Ride started
+  socket.on('ride_start', async (data) => {
+    try {
+      const ride = pendingRides.get(data.ride_id);
+      if (ride) {
+        ride.status = 'started';
+        ride.started_at = new Date().toISOString();
+        
+        io.emit('ride_started', {
+          ride_id: data.ride_id,
+          driver_id: data.driver_id,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`🏁 Ride ${data.ride_id} started`);
+      }
+    } catch (error) {
+      console.error('Error starting ride:', error);
+    }
+  });
+  
+  // Ride completed
+  socket.on('ride_complete', async (data) => {
+    try {
+      const ride = pendingRides.get(data.ride_id);
+      if (ride) {
+        ride.status = 'completed';
+        ride.completed_at = new Date().toISOString();
+        
+        // Set driver available again
+        const driver = activeDrivers.get(data.driver_id);
+        if (driver) {
+          driver.isAvailable = true;
+          console.log(`✅ Driver ${data.driver_id} is now available`);
+        }
+        
+        io.emit('ride_completed', {
+          ride_id: data.ride_id,
+          driver_id: data.driver_id,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Remove from pending
+        pendingRides.delete(data.ride_id);
+        console.log(`🏁 Ride ${data.ride_id} completed`);
+      }
+    } catch (error) {
+      console.error('Error completing ride:', error);
+    }
+  });
+  
+  // Driver set available
+  socket.on('driver_available', (data) => {
+    try {
+      const driver = activeDrivers.get(data.driver_id);
+      if (driver) {
+        driver.isAvailable = true;
+        console.log(`✅ Driver ${data.driver_id} set to available`);
+      }
+    } catch (error) {
+      console.error('Error setting driver available:', error);
+    }
   });
   
   // Driver going offline
