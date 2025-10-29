@@ -172,6 +172,19 @@ export const RidesService = {
         },
       });
 
+      // Generate OTP and persist/broadcast via event
+      try {
+        const otp = Math.floor(Math.random() * 10000).toString().padStart(4, '0').replace(/^0000$/, '0001');
+        await supabase.from('rides').update({ trip_otp: otp }).eq('id', rideId);
+        await supabase.from('ride_events').insert({
+          ride_id: rideId,
+          actor: 'system',
+          event_type: 'ride:otp_issued',
+          payload: { otp, driver_id: driverId },
+          created_at: new Date().toISOString(),
+        });
+      } catch (_) {}
+
       // Update driver availability
       await supabase.from('drivers').update({
         is_available: false,

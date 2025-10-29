@@ -50,6 +50,15 @@ export const completedRides = new Map<string, Ride>();
 export const driverSessions = new Map<string, string>(); // socket_id -> driver_id
 export const rideAssignments = new Map<string, string>(); // ride_id -> driver_id
 
+// OTP store (optional cache); primary source of truth is DB
+const rideOtps = new Map<string, string>();
+
+function generateOtp(): string {
+  const n = Math.floor(Math.random() * 10000);
+  const code = n.toString().padStart(4, '0');
+  return code === '0000' ? '0001' : code;
+}
+
 // ========================================
 // SUPABASE HELPER FUNCTIONS
 // ========================================
@@ -835,6 +844,23 @@ export function registerDriverHandlers(
           driver_to_pickup_duration: ride.driver_to_pickup_duration
         });
         logger.info({ rideId, driverId }, 'Database updated successfully');
+
+        // Issue OTP for this ride
+        const otp = generateOtp();
+        rideOtps.set(rideId, otp);
+        try {
+          await supabase.from('rides').update({ trip_otp: otp }).eq('id', rideId);
+        } catch (e) {
+          logger.warn({ e, rideId }, 'Failed to persist OTP to rides table (column may not exist)');
+        }
+        // Log OTP issued event
+        await supabase.from('ride_events').insert({
+          ride_id: rideId,
+          actor: 'system',
+          event_type: 'ride:otp_issued',
+          payload: { otp, driver_id: driverId },
+          created_at: new Date().toISOString(),
+        });
       } catch (dbError) {
         logger.error({ dbError, rideId, driverId }, 'Failed to update ride in database');
         
@@ -881,6 +907,11 @@ export function registerDriverHandlers(
       
       io.to(rideRoom).emit('ride_accepted', acceptedPayload);
       io.to(rideRoom).emit('ride_room_joined', { ride_id: rideId, members: 2 });
+      // Send OTP to passenger app via socket as well (in addition to DB event)
+      const otpSocket = rideOtps.get(rideId);
+      if (otpSocket) {
+        io.to(rideRoom).emit('ride_otp', { ride_id: rideId, otp: otpSocket, timestamp: new Date().toISOString() });
+      }
 
       // Also broadcast globally to ensure passenger receives event even if not in room yet
       io.emit('ride_accepted', { ...acceptedPayload, is_global_broadcast: true });
@@ -988,7 +1019,7 @@ export function registerDriverHandlers(
   // RIDE START
   // ========================================
   
-  socket.on('ride_start', (data) => {
+  socket.on('ride_start', async (data) => {
     try {
       logger.info({ driver_id: data.driver_id, ride_id: data.ride_id }, 'Driver starting ride');
       
@@ -1006,9 +1037,53 @@ export function registerDriverHandlers(
         return;
       }
 
+      // Verify OTP was confirmed before starting
+      let verified = false;
+      try {
+        // Check rides.otp_verified_at first
+        const { data: rideRow } = await supabase
+          .from('rides')
+          .select('otp_verified_at')
+          .eq('id', rideId)
+          .maybeSingle();
+        if (rideRow && rideRow.otp_verified_at) {
+          verified = true;
+        } else {
+          // Fallback: look for recent ride:otp_verified event
+          const { data: ev } = await supabase
+            .from('ride_events')
+            .select('id')
+            .eq('ride_id', rideId)
+            .eq('event_type', 'ride:otp_verified')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          verified = !!ev;
+        }
+      } catch (e) {}
+
+      if (!verified) {
+        socket.emit('error', { message: 'OTP not verified yet' });
+        return;
+      }
+
       // Update ride status
       ride.status = 'started';
       ride.started_at = new Date().toISOString();
+
+      // Persist to DB
+      try {
+        await updateRideStatus(rideId, 'started', { started_at: ride.started_at });
+        await supabase.from('ride_events').insert({
+          ride_id: rideId,
+          actor: 'driver',
+          event_type: 'ride:started',
+          payload: { driver_id: driverId },
+          created_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        logger.warn({ e, rideId }, 'Failed to persist ride start to DB');
+      }
 
       // Notify passenger that ride has started
       const rideRoom = `ride_${rideId}`;
