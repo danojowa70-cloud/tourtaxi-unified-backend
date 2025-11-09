@@ -184,6 +184,7 @@ export function registerPassengerHandlers(
         status: rideStatus,
         notes: validatedRideData.notes || null,
         requested_at: validatedRideData.requested_at || new Date().toISOString(),
+        vehicle_type: validatedRideData.vehicle_type, // Store requested vehicle type
         driver_id: null,
         accepted_at: null,
         started_at: null,
@@ -231,11 +232,18 @@ export function registerPassengerHandlers(
         return; // Stop processing
       }
 
-      // Find nearby available drivers
+      // Find nearby available drivers matching the requested vehicle type
+      const requestedVehicleType = validatedRideData.vehicle_type || null;
+      logger.info({ 
+        ride_id: rideId, 
+        requested_vehicle_type: requestedVehicleType 
+      }, 'Finding nearby drivers with vehicle type filter');
+      
       const nearbyDrivers = await findNearbyDrivers(
         validatedRideData.pickup_latitude, 
         validatedRideData.pickup_longitude, 
-        env.ride.defaultRadiusKm
+        env.ride.defaultRadiusKm,
+        requestedVehicleType // Pass vehicle type filter
       );
 
       logger.info({ 
@@ -261,7 +269,7 @@ export function registerPassengerHandlers(
         timestamp: new Date().toISOString()
       };
       
-      // CRITICAL FIX: Filter nearbyDrivers to only include drivers in activeDrivers AND available
+      // CRITICAL FIX: Filter nearbyDrivers to only include drivers in activeDrivers, available, AND matching vehicle type
       const availableNearbyDrivers = nearbyDrivers.filter(driverInfo => {
         const driver = activeDrivers.get(driverInfo.driver_id);
         if (!driver || !driver.isAvailable || !driver.isOnline) {
@@ -274,6 +282,34 @@ export function registerPassengerHandlers(
           }, 'Driver from database not in activeDrivers or not available');
           return false;
         }
+        
+        // Filter by vehicle type if specified
+        if (requestedVehicleType) {
+          const driverVehicleType = (driver.vehicle_type || '').toLowerCase().trim();
+          const requestedType = requestedVehicleType.toLowerCase().trim();
+          
+          // Handle car/sedan synonyms
+          const isCarMatch = (requestedType === 'car' || requestedType === 'sedan') && 
+                            (driverVehicleType === 'car' || driverVehicleType === 'sedan');
+          
+          // Handle bike/motorcycle variants
+          const isBikeMatch = (requestedType === 'bike' || requestedType === 'motorcycle') && 
+                             (driverVehicleType === 'bike' || driverVehicleType === 'motorcycle' || driverVehicleType === 'motorbike');
+          
+          // Exact match for other types (SUV, etc.)
+          const isExactMatch = driverVehicleType === requestedType;
+          
+          if (!isCarMatch && !isBikeMatch && !isExactMatch) {
+            logger.debug({ 
+              driver_id: driverInfo.driver_id,
+              driver_vehicle_type: driverVehicleType,
+              requested_vehicle_type: requestedType,
+              ride_id: rideId
+            }, 'Driver vehicle type does not match requested type');
+            return false;
+          }
+        }
+        
         return true;
       });
       

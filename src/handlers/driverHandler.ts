@@ -418,25 +418,26 @@ export function calculateFare(distance: number, duration: number): number {
   return Math.max(fare, env.fare.minimumFare);
 }
 
-export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm): Promise<NearbyDriverInfo[]> {
+export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm, vehicleType: string | null = null): Promise<NearbyDriverInfo[]> {
   try {
-    // Use database function to get nearby online and available drivers
+    // Use database function to get nearby online and available drivers with vehicle type filter
     const { data: nearbyDriversData, error } = await supabase.rpc('get_nearby_drivers', {
       lat: lat,
       lng: lng,
-      radius_km: radiusKm
+      radius_km: radiusKm,
+      desired_vehicle: vehicleType // Pass vehicle type filter to database function
     });
 
     if (error) {
-      logger.error({ error }, 'Error fetching nearby drivers from database');
+      logger.error({ error, vehicleType }, 'Error fetching nearby drivers from database');
       // Fallback to in-memory search
-      return findNearbyDriversInMemory(lat, lng, radiusKm);
+      return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
     }
 
     if (!nearbyDriversData || nearbyDriversData.length === 0) {
       // Important: DB may be stale or empty during cold starts - fallback to in-memory drivers
-      logger.warn({ lat, lng, radiusKm }, 'No nearby drivers found in DB, falling back to in-memory search');
-      return findNearbyDriversInMemory(lat, lng, radiusKm);
+      logger.warn({ lat, lng, radiusKm, vehicleType }, 'No nearby drivers found in DB, falling back to in-memory search');
+      return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
     }
 
     // Transform database results to NearbyDriverInfo format
@@ -450,22 +451,44 @@ export async function findNearbyDrivers(lat: number, lng: number, radiusKm: numb
       vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown'
     }));
 
-    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm }, 'Found nearby drivers from database');
+    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm, vehicleType }, 'Found nearby drivers from database with vehicle filter');
     return nearbyDrivers;
 
   } catch (error) {
     logger.error({ error }, 'Error in findNearbyDrivers');
     // Fallback to in-memory search
-    return findNearbyDriversInMemory(lat, lng, radiusKm);
+    return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
   }
 }
 
-// Fallback in-memory search function
-function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number): NearbyDriverInfo[] {
+// Fallback in-memory search function with vehicle type filtering
+function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number, vehicleType: string | null = null): NearbyDriverInfo[] {
   const nearbyDrivers: NearbyDriverInfo[] = [];
   
   activeDrivers.forEach((driver, driverId) => {
     if (driver.isOnline && driver.isAvailable) {
+      // Apply vehicle type filter if specified
+      if (vehicleType) {
+        const driverVehicleType = (driver.vehicle_type || '').toLowerCase().trim();
+        const requestedType = vehicleType.toLowerCase().trim();
+        
+        // Handle car/sedan synonyms
+        const isCarMatch = (requestedType === 'car' || requestedType === 'sedan') && 
+                          (driverVehicleType === 'car' || driverVehicleType === 'sedan');
+        
+        // Handle bike/motorcycle variants
+        const isBikeMatch = (requestedType === 'bike' || requestedType === 'motorcycle') && 
+                           (driverVehicleType === 'bike' || driverVehicleType === 'motorcycle' || driverVehicleType === 'motorbike');
+        
+        // Exact match for other types (SUV, etc.)
+        const isExactMatch = driverVehicleType === requestedType;
+        
+        // Skip if no match
+        if (!isCarMatch && !isBikeMatch && !isExactMatch) {
+          return;
+        }
+      }
+      
       const distance = getDistance(
         { latitude: lat, longitude: lng },
         { latitude: driver.latitude, longitude: driver.longitude }

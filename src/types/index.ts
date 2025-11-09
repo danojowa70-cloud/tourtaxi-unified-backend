@@ -78,6 +78,7 @@ export const RideSchema = z.object({
   status: RideStatusSchema,
   notes: z.string().nullable().optional(),
   requested_at: z.string(),
+  vehicle_type: z.string().optional(), // Requested vehicle type
   driver_id: z.string().nullable().optional(),
   driver_name: z.string().optional(),
   driver_phone: z.string().optional(),
@@ -127,6 +128,9 @@ export const RideRequestSchema = z.object({
   fare: z.number().or(z.string()).optional(),
   status: RideStatusSchema.optional(),
   requested_at: z.string().optional(),
+  
+  // Vehicle selection
+  vehicle_type: z.string().optional(), // 'car', 'suv', 'bike', etc.
   
   // Optional notes
   notes: z.string().optional(),
