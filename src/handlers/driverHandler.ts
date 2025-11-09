@@ -156,28 +156,57 @@ export async function saveRideToDatabase(rideData: Ride): Promise<any> {
     
     if (rideData.passenger_id) {
       try {
-        // Try to upsert passenger by auth_user_id
-        const { data: passengerData, error: passengerError } = await supabase
+        // First, check if passenger already exists
+        const { data: existingPassenger, error: checkError } = await supabase
           .from('passengers')
-          .upsert({
-            auth_user_id: rideData.passenger_id,
-            name: rideData.passenger_name,
-            phone: rideData.passenger_phone,
-          }, { onConflict: 'auth_user_id' })
-          .select()
-          .single();
+          .select('id')
+          .eq('auth_user_id', rideData.passenger_id)
+          .maybeSingle();
         
-        if (!passengerError && passengerData) {
-          finalPassengerId = passengerData.id;
-          logger.info({ passenger_id: finalPassengerId }, 'Passenger record created/updated');
-        } else if (passengerError) {
-          logger.warn({ error: passengerError, passenger_id: rideData.passenger_id }, 'Failed to create passenger, will use auth_user_id directly');
-          // Continue with original passenger_id if upsert fails
+        if (existingPassenger) {
+          // Passenger exists, use their ID
+          finalPassengerId = existingPassenger.id;
+          logger.info({ passenger_id: finalPassengerId, auth_user_id: rideData.passenger_id }, 'Found existing passenger record');
+          
+          // Update passenger info
+          await supabase
+            .from('passengers')
+            .update({
+              name: rideData.passenger_name,
+              phone: rideData.passenger_phone,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', finalPassengerId);
+        } else {
+          // Passenger doesn't exist, create new record
+          const { data: newPassenger, error: insertError } = await supabase
+            .from('passengers')
+            .insert({
+              auth_user_id: rideData.passenger_id,
+              name: rideData.passenger_name,
+              phone: rideData.passenger_phone,
+            })
+            .select('id')
+            .single();
+          
+          if (insertError) {
+            logger.error({ error: insertError, passenger_id: rideData.passenger_id }, 'CRITICAL: Failed to create passenger record');
+            throw new Error(`Failed to create passenger record: ${insertError.message}`);
+          }
+          
+          if (newPassenger) {
+            finalPassengerId = newPassenger.id;
+            logger.info({ passenger_id: finalPassengerId, auth_user_id: rideData.passenger_id }, 'Created new passenger record');
+          } else {
+            throw new Error('Passenger insert returned no data');
+          }
         }
-      } catch (passengerErr) {
-        logger.warn({ error: passengerErr, passenger_id: rideData.passenger_id }, 'Exception creating passenger, continuing with original ID');
-        // Continue with original passenger_id
+      } catch (passengerErr: any) {
+        logger.error({ error: passengerErr, passenger_id: rideData.passenger_id }, 'CRITICAL: Exception handling passenger record');
+        throw new Error(`Passenger creation failed: ${passengerErr.message}`);
       }
+    } else {
+      throw new Error('No passenger_id provided in ride data');
     }
     
     const { data, error } = await supabase
