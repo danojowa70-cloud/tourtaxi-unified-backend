@@ -917,6 +917,11 @@ export function registerDriverHandlers(
       try {
         await updateRideStatus(rideId, 'accepted', {
           driver_id: driverId,
+          driver_name: driver.name,
+          driver_phone: driver.phone,
+          driver_vehicle: driver.vehicle_type,
+          driver_vehicle_number: driver.vehicle_number,
+          driver_rating: driver.rating,
           accepted_at: ride.accepted_at,
           driver_latitude: driver.latitude,
           driver_longitude: driver.longitude,
