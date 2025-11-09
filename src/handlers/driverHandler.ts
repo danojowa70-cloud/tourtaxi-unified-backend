@@ -151,12 +151,41 @@ export async function updateDriverLocation(driverId: string, latitude: number, l
 
 export async function saveRideToDatabase(rideData: Ride): Promise<any> {
   try {
+    // IMPORTANT: Create/update passenger FIRST to satisfy foreign key constraint
+    let finalPassengerId = rideData.passenger_id;
+    
+    if (rideData.passenger_id) {
+      try {
+        // Try to upsert passenger by auth_user_id
+        const { data: passengerData, error: passengerError } = await supabase
+          .from('passengers')
+          .upsert({
+            auth_user_id: rideData.passenger_id,
+            name: rideData.passenger_name,
+            phone: rideData.passenger_phone,
+          }, { onConflict: 'auth_user_id' })
+          .select()
+          .single();
+        
+        if (!passengerError && passengerData) {
+          finalPassengerId = passengerData.id;
+          logger.info({ passenger_id: finalPassengerId }, 'Passenger record created/updated');
+        } else if (passengerError) {
+          logger.warn({ error: passengerError, passenger_id: rideData.passenger_id }, 'Failed to create passenger, will use auth_user_id directly');
+          // Continue with original passenger_id if upsert fails
+        }
+      } catch (passengerErr) {
+        logger.warn({ error: passengerErr, passenger_id: rideData.passenger_id }, 'Exception creating passenger, continuing with original ID');
+        // Continue with original passenger_id
+      }
+    }
+    
     const { data, error } = await supabase
       .from('rides')
       .insert({
         id: rideData.ride_id,
         driver_id: rideData.driver_id,
-        passenger_id: rideData.passenger_id,
+        passenger_id: finalPassengerId,
         passenger_name: rideData.passenger_name,
         passenger_phone: rideData.passenger_phone,
         passenger_image: rideData.passenger_image,
