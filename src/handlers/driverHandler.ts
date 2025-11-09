@@ -503,10 +503,10 @@ export async function findNearbyDrivers(lat: number, lng: number, radiusKm: numb
       driver_id: driver.id,
       distance: driver.distance_km,
       rating: driver.rating || 4.5,
-      vehicle_type: `${driver.vehicle_make || ''} ${driver.vehicle_model || driver.vehicle_type || 'Vehicle'}`.trim(),
+      vehicle_type: driver.vehicle_type || driver.vehicle_model || 'Vehicle',
       name: driver.name || 'Driver',
       phone: driver.phone || '',
-      vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown'
+      vehicle_number: driver.vehicle_number || 'Unknown'
     }));
 
     logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm, vehicleType }, 'Found nearby drivers from database with vehicle filter');
