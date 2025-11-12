@@ -60,7 +60,17 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
 
     // Passenger doesn't exist, insert new record
     // Use provided email or generate default if not provided (since email is required)
-    const passengerEmail = email || `${passengerId}@passenger.tourtaxi.app`;
+    let passengerEmail: string;
+    if (email) {
+      passengerEmail = email;
+      logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Using real email provided by passenger app');
+    } else {
+      passengerEmail = `${passengerId}@passenger.tourtaxi.app`;
+      logger.warn({ 
+        passenger_id: passengerId, 
+        fallback_email: passengerEmail 
+      }, 'WARNING: No email provided by passenger app, using fallback email. Passenger app should send real email!');
+    }
     
     const { error: insertError } = await supabase
       .from('passengers')
