@@ -496,7 +496,7 @@ function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number, v
 }
 
 export function generateRideId(): string {
-  return `ride_${Date.now()}_${uuidv4().substring(0, 8)}`;
+  return uuidv4();
 }
 
 export function validateRideData(rideData: any): void {
