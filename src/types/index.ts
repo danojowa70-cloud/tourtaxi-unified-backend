@@ -206,6 +206,7 @@ export interface NearbyDriverInfo {
   name: string;
   phone: string;
   vehicle_number: string;
+  raw_vehicle_type?: string; // Raw vehicle type from database for filtering
 }
 
 // Socket Event Types

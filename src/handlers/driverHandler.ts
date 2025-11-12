@@ -382,7 +382,7 @@ export function calculateFare(distance: number, duration: number): number {
   return Math.max(fare, env.fare.minimumFare);
 }
 
-export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm): Promise<NearbyDriverInfo[]> {
+export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm, vehicleType?: string | null): Promise<NearbyDriverInfo[]> {
   try {
     // Use database function to get nearby online and available drivers
     const { data: nearbyDriversData, error } = await supabase.rpc('get_nearby_drivers', {
@@ -394,7 +394,7 @@ export async function findNearbyDrivers(lat: number, lng: number, radiusKm: numb
     if (error) {
       logger.error({ error }, 'Error fetching nearby drivers from database');
       // Fallback to in-memory search
-      return findNearbyDriversInMemory(lat, lng, radiusKm);
+      return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
     }
 
     if (!nearbyDriversData || nearbyDriversData.length === 0) {
@@ -403,32 +403,75 @@ export async function findNearbyDrivers(lat: number, lng: number, radiusKm: numb
     }
 
     // Transform database results to NearbyDriverInfo format
-    const nearbyDrivers: NearbyDriverInfo[] = nearbyDriversData.map((driver: any) => ({
+    let nearbyDrivers: NearbyDriverInfo[] = nearbyDriversData.map((driver: any) => ({
       driver_id: driver.id,
       distance: driver.distance_km,
       rating: driver.rating || 4.5,
       vehicle_type: `${driver.vehicle_make || ''} ${driver.vehicle_model || driver.vehicle_type || 'Vehicle'}`.trim(),
       name: driver.name || 'Driver',
       phone: driver.phone || '',
-      vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown'
+      vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown',
+      raw_vehicle_type: driver.vehicle_type || '' // Add raw vehicle type for filtering
     }));
 
-    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm }, 'Found nearby drivers from database');
+    // Filter by vehicle type if specified
+    if (vehicleType) {
+      const requestedType = vehicleType.toLowerCase().trim();
+      nearbyDrivers = nearbyDrivers.filter(driver => {
+        const driverVehicleType = (driver.raw_vehicle_type || '').toLowerCase().trim();
+        
+        // Handle car/sedan synonyms
+        const isCarMatch = (requestedType === 'car' || requestedType === 'sedan') && 
+                          (driverVehicleType === 'car' || driverVehicleType === 'sedan');
+        
+        // Handle bike/motorcycle variants
+        const isBikeMatch = (requestedType === 'bike' || requestedType === 'motorcycle') && 
+                           (driverVehicleType === 'bike' || driverVehicleType === 'motorcycle' || driverVehicleType === 'motorbike');
+        
+        // Exact match for other types (SUV, etc.)
+        const isExactMatch = driverVehicleType === requestedType;
+        
+        return isCarMatch || isBikeMatch || isExactMatch;
+      });
+    }
+
+    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm, vehicleType }, 'Found nearby drivers from database');
     return nearbyDrivers;
 
   } catch (error) {
     logger.error({ error }, 'Error in findNearbyDrivers');
     // Fallback to in-memory search
-    return findNearbyDriversInMemory(lat, lng, radiusKm);
+    return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
   }
 }
 
 // Fallback in-memory search function
-function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number): NearbyDriverInfo[] {
+function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number, vehicleType?: string | null): NearbyDriverInfo[] {
   const nearbyDrivers: NearbyDriverInfo[] = [];
   
   activeDrivers.forEach((driver, driverId) => {
     if (driver.isOnline && driver.isAvailable) {
+      // Filter by vehicle type if specified
+      if (vehicleType) {
+        const driverVehicleType = (driver.vehicle_type || '').toLowerCase().trim();
+        const requestedType = vehicleType.toLowerCase().trim();
+        
+        // Handle car/sedan synonyms
+        const isCarMatch = (requestedType === 'car' || requestedType === 'sedan') && 
+                          (driverVehicleType === 'car' || driverVehicleType === 'sedan');
+        
+        // Handle bike/motorcycle variants
+        const isBikeMatch = (requestedType === 'bike' || requestedType === 'motorcycle') && 
+                           (driverVehicleType === 'bike' || driverVehicleType === 'motorcycle' || driverVehicleType === 'motorbike');
+        
+        // Exact match for other types (SUV, etc.)
+        const isExactMatch = driverVehicleType === requestedType;
+        
+        if (!isCarMatch && !isBikeMatch && !isExactMatch) {
+          return; // Skip this driver
+        }
+      }
+      
       const distance = getDistance(
         { latitude: lat, longitude: lng },
         { latitude: driver.latitude, longitude: driver.longitude }
