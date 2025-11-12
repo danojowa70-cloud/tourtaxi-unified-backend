@@ -72,77 +72,30 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       }, 'WARNING: No email provided by passenger app, using fallback email. Passenger app should send real email!');
     }
     
-    const { error: insertError } = await supabase
+    // Use upsert instead of insert to handle both new and existing passengers
+    // This will insert if passenger doesn't exist, or update if they do
+    const { error: upsertError } = await supabase
       .from('passengers')
-      .insert({
+      .upsert({
         id: passengerId,
         name: name || 'Passenger',
         phone: phone || '',
         email: passengerEmail,
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
+        // Note: created_at will be set by database default on first insert
+      }, {
+        onConflict: 'id', // Use passenger ID as the conflict resolution key
+        ignoreDuplicates: false // Update existing record if found
       });
 
-    if (insertError) {
-      // Handle duplicate email error (code 23505)
-      if (insertError.code === '23505') {
-        logger.warn({ 
-          passenger_id: passengerId, 
-          email: passengerEmail,
-          error_code: insertError.code
-        }, 'Duplicate email detected - checking if passenger exists by ID');
-        
-        // Verify the passenger actually exists in database by ID
-        const { data: verifyPassenger } = await supabase
-          .from('passengers')
-          .select('id')
-          .eq('id', passengerId)
-          .single();
-        
-        if (verifyPassenger) {
-          logger.info({ passenger_id: passengerId }, 'Passenger exists in database (verified after duplicate email)');
-          return true; // Success - passenger exists
-        } else {
-          logger.error({ passenger_id: passengerId }, 'Passenger does NOT exist despite duplicate email error');
-          throw new Error('Passenger record inconsistency - cannot create ride');
-        }
-      }
-      
-      // For other errors, log and throw
-      logger.error({ error: insertError, passenger_id: passengerId }, 'Failed to insert passenger into database');
-      throw insertError;
+    if (upsertError) {
+      logger.error({ error: upsertError, passenger_id: passengerId, email: passengerEmail }, 'Failed to upsert passenger into database');
+      throw upsertError;
     }
     
-    logger.info({ passenger_id: passengerId, email: passengerEmail }, 'New passenger record created in database');
-    return true; // Success - passenger created
+    logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Passenger record upserted successfully');
+    return true; // Success - passenger created or updated
   } catch (e: any) {
-    // Handle duplicate email error at catch level too
-    if (e.code === '23505') {
-      logger.warn({ 
-        passenger_id: passengerId,
-        error_code: e.code
-      }, 'Caught duplicate key error at top level - verifying passenger exists');
-      
-      // Verify the passenger actually exists - need to import supabase again in catch scope
-      try {
-        const { default: supabaseVerify } = await import('../config/supabase');
-        const { data: verifyPassenger } = await supabaseVerify
-          .from('passengers')
-          .select('id')
-          .eq('id', passengerId)
-          .single();
-        
-        if (verifyPassenger) {
-          logger.info({ passenger_id: passengerId }, 'Passenger verified to exist');
-          return true; // Success
-        }
-      } catch (verifyError) {
-        logger.error({ error: verifyError, passenger_id: passengerId }, 'Failed to verify passenger existence');
-      }
-      
-      throw new Error('Passenger record inconsistency');
-    }
-    
     logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
     throw e;
   }
