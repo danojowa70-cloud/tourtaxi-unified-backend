@@ -36,30 +36,49 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
   try {
     const { default: supabase } = await import('../config/supabase');
     
+    // First, check if passenger already exists
+    const { data: existingPassenger, error: fetchError } = await supabase
+      .from('passengers')
+      .select('id, email, name')
+      .eq('id', passengerId)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      logger.error({ error: fetchError, passenger_id: passengerId }, 'Error checking if passenger exists');
+      throw fetchError;
+    }
+
+    // If passenger exists, don't overwrite their data
+    if (existingPassenger) {
+      logger.info({ 
+        passenger_id: passengerId, 
+        existing_email: existingPassenger.email,
+        existing_name: existingPassenger.name
+      }, 'Passenger already exists in database, skipping insert');
+      return;
+    }
+
+    // Passenger doesn't exist, insert new record
     // Use provided email or generate default if not provided (since email is required)
     const passengerEmail = email || `${passengerId}@passenger.tourtaxi.app`;
     
-    // Try to upsert passenger (insert if not exists, update if exists)
-    const { error } = await supabase
+    const { error: insertError } = await supabase
       .from('passengers')
-      .upsert({
+      .insert({
         id: passengerId,
         name: name || 'Passenger',
         phone: phone || '',
         email: passengerEmail,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'id',
-        ignoreDuplicates: false
       });
 
-    if (error) {
-      logger.error({ error, passenger_id: passengerId }, 'Failed to ensure passenger exists in database');
-      throw error;
+    if (insertError) {
+      logger.error({ error: insertError, passenger_id: passengerId }, 'Failed to insert passenger into database');
+      throw insertError;
     }
     
-    logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Passenger record ensured in database');
+    logger.info({ passenger_id: passengerId, email: passengerEmail }, 'New passenger record created in database');
   } catch (e) {
     logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
     throw e;
