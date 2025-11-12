@@ -123,9 +123,10 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
         error_code: e.code
       }, 'Caught duplicate key error at top level - verifying passenger exists');
       
-      // Verify the passenger actually exists
+      // Verify the passenger actually exists - need to import supabase again in catch scope
       try {
-        const { data: verifyPassenger } = await supabase
+        const { default: supabaseVerify } = await import('../config/supabase');
+        const { data: verifyPassenger } = await supabaseVerify
           .from('passengers')
           .select('id')
           .eq('id', passengerId)
