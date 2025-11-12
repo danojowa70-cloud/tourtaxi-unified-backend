@@ -110,6 +110,7 @@ export const RideRequestSchema = z.object({
   passenger_id: z.string(),
   passenger_name: z.string(),
   passenger_phone: z.string(),
+  passenger_email: z.string().optional(), // Add email field
   passenger_image: z.string().optional(),
   
   // Pickup location
@@ -159,6 +160,7 @@ export const PassengerConnectionSchema = z.object({
   passenger_id: z.string(),
   name: z.string().optional(),
   phone: z.string().optional(),
+  email: z.string().optional(), // Add email field
 });
 
 export type PassengerConnection = z.infer<typeof PassengerConnectionSchema>;

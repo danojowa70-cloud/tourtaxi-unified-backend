@@ -32,12 +32,12 @@ export const activePassengers = new Map<string, Passenger>();
 export const passengerSessions = new Map<string, string>(); // socket_id -> passenger_id
 
 // Helper to ensure passenger exists in database
-async function ensurePassengerExists(passengerId: string, name?: string, phone?: string): Promise<void> {
+async function ensurePassengerExists(passengerId: string, name?: string, phone?: string, email?: string): Promise<void> {
   try {
     const { default: supabase } = await import('../config/supabase');
     
-    // Generate default email if not provided (since email is required)
-    const email = `${passengerId}@passenger.tourtaxi.app`;
+    // Use provided email or generate default if not provided (since email is required)
+    const passengerEmail = email || `${passengerId}@passenger.tourtaxi.app`;
     
     // Try to upsert passenger (insert if not exists, update if exists)
     const { error } = await supabase
@@ -46,7 +46,7 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
         id: passengerId,
         name: name || 'Passenger',
         phone: phone || '',
-        email: email,
+        email: passengerEmail,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {
@@ -59,7 +59,7 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       throw error;
     }
     
-    logger.info({ passenger_id: passengerId }, 'Passenger record ensured in database');
+    logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Passenger record ensured in database');
   } catch (e) {
     logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
     throw e;
@@ -236,7 +236,8 @@ export function registerPassengerHandlers(
         await ensurePassengerExists(
           validatedRideData.passenger_id,
           validatedRideData.passenger_name,
-          validatedRideData.passenger_phone
+          validatedRideData.passenger_phone,
+          validatedRideData.passenger_email
         );
       } catch (passengerError) {
         logger.error({ error: passengerError, ride_id: rideId }, 'Failed to ensure passenger exists in database');
