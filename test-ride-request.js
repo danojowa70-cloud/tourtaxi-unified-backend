@@ -1,6 +1,10 @@
 const io = require('socket.io-client');
+const { v4: uuidv4 } = require('uuid');
+
+const passengerId = uuidv4();
 
 console.log('🚀 Starting Ride Request Test...\n');
+console.log(`   Passenger ID: ${passengerId}\n`);
 
 // Connect to backend
 const socket = io('https://tourtaxi-unified-backend.onrender.com', {
@@ -15,9 +19,10 @@ socket.on('connect', () => {
   // Step 1: Connect as passenger
   console.log('📱 Step 1: Connecting as passenger...');
   socket.emit('connect_passenger', {
-    passenger_id: 'test-passenger-uuid-123',
+    passenger_id: passengerId,
     name: 'Test Passenger',
-    phone: '+1234567890'
+    phone: '+1234567890',
+    email: 'test@passenger.com'
   });
 });
 
@@ -34,9 +39,10 @@ socket.on('passenger_connected', (data) => {
     console.log('');
     
     socket.emit('ride_request', {
-      passenger_id: 'a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d',
+      passenger_id: passengerId,
       passenger_name: 'Test Passenger',
       passenger_phone: '+1234567890',
+      passenger_email: 'test@passenger.com',
       pickup_latitude: 28.6139,
       pickup_longitude: 77.2090,
       pickup_address: '123 Test Street, Connaught Place, New Delhi',

@@ -84,12 +84,33 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       });
 
     if (insertError) {
+      // Handle duplicate email error (code 23505) - this is OK, passenger exists
+      if (insertError.code === '23505') {
+        logger.info({ 
+          passenger_id: passengerId, 
+          email: passengerEmail,
+          error_code: insertError.code
+        }, 'Passenger with this email already exists (duplicate key), continuing with ride request');
+        // Don't throw error, just return - passenger can still make ride requests
+        return;
+      }
+      
+      // For other errors, log and throw
       logger.error({ error: insertError, passenger_id: passengerId }, 'Failed to insert passenger into database');
       throw insertError;
     }
     
     logger.info({ passenger_id: passengerId, email: passengerEmail }, 'New passenger record created in database');
-  } catch (e) {
+  } catch (e: any) {
+    // Handle duplicate email error at catch level too
+    if (e.code === '23505') {
+      logger.info({ 
+        passenger_id: passengerId,
+        error_code: e.code
+      }, 'Caught duplicate key error, passenger exists, continuing');
+      return; // Don't throw, allow ride request to continue
+    }
+    
     logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
     throw e;
   }
