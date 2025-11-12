@@ -50,15 +50,6 @@ export const completedRides = new Map<string, Ride>();
 export const driverSessions = new Map<string, string>(); // socket_id -> driver_id
 export const rideAssignments = new Map<string, string>(); // ride_id -> driver_id
 
-// OTP store (optional cache); primary source of truth is DB
-const rideOtps = new Map<string, string>();
-
-function generateOtp(): string {
-  const n = Math.floor(Math.random() * 10000);
-  const code = n.toString().padStart(4, '0');
-  return code === '0000' ? '0001' : code;
-}
-
 // ========================================
 // SUPABASE HELPER FUNCTIONS
 // ========================================
@@ -151,70 +142,12 @@ export async function updateDriverLocation(driverId: string, latitude: number, l
 
 export async function saveRideToDatabase(rideData: Ride): Promise<any> {
   try {
-    // IMPORTANT: Create/update passenger FIRST to satisfy foreign key constraint
-    let finalPassengerId = rideData.passenger_id;
-    
-    if (rideData.passenger_id) {
-      try {
-        // First, check if passenger already exists
-        const { data: existingPassenger, error: checkError } = await supabase
-          .from('passengers')
-          .select('id')
-          .eq('auth_user_id', rideData.passenger_id)
-          .maybeSingle();
-        
-        if (existingPassenger) {
-          // Passenger exists, use their ID
-          finalPassengerId = existingPassenger.id;
-          logger.info({ passenger_id: finalPassengerId, auth_user_id: rideData.passenger_id }, 'Found existing passenger record');
-          
-          // Update passenger info
-          await supabase
-            .from('passengers')
-            .update({
-              name: rideData.passenger_name,
-              phone: rideData.passenger_phone,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', finalPassengerId);
-        } else {
-          // Passenger doesn't exist, create new record
-          const { data: newPassenger, error: insertError } = await supabase
-            .from('passengers')
-            .insert({
-              auth_user_id: rideData.passenger_id,
-              name: rideData.passenger_name,
-              phone: rideData.passenger_phone,
-            })
-            .select('id')
-            .single();
-          
-          if (insertError) {
-            logger.error({ error: insertError, passenger_id: rideData.passenger_id }, 'CRITICAL: Failed to create passenger record');
-            throw new Error(`Failed to create passenger record: ${insertError.message}`);
-          }
-          
-          if (newPassenger) {
-            finalPassengerId = newPassenger.id;
-            logger.info({ passenger_id: finalPassengerId, auth_user_id: rideData.passenger_id }, 'Created new passenger record');
-          } else {
-            throw new Error('Passenger insert returned no data');
-          }
-        }
-      } catch (passengerErr: any) {
-        logger.error({ error: passengerErr, passenger_id: rideData.passenger_id }, 'CRITICAL: Exception handling passenger record');
-        throw new Error(`Passenger creation failed: ${passengerErr.message}`);
-      }
-    } else {
-      throw new Error('No passenger_id provided in ride data');
-    }
-    
     const { data, error } = await supabase
       .from('rides')
       .insert({
         id: rideData.ride_id,
         driver_id: rideData.driver_id,
-        passenger_id: finalPassengerId,
+        passenger_id: rideData.passenger_id,
         passenger_name: rideData.passenger_name,
         passenger_phone: rideData.passenger_phone,
         passenger_image: rideData.passenger_image,
@@ -234,8 +167,6 @@ export async function saveRideToDatabase(rideData: Ride): Promise<any> {
         driver_to_pickup_polyline: rideData.driver_to_pickup_polyline,
         driver_to_pickup_distance: rideData.driver_to_pickup_distance,
         driver_to_pickup_duration: rideData.driver_to_pickup_duration,
-        driver_latitude: rideData.driver_latitude || null,
-        driver_longitude: rideData.driver_longitude || null,
         status: rideData.status,
         notes: rideData.notes,
         rating: rideData.rating,
@@ -248,16 +179,11 @@ export async function saveRideToDatabase(rideData: Ride): Promise<any> {
         cancellation_reason: rideData.cancellation_reason
       });
 
-    if (error) {
-      logger.error({ error, ride_id: rideData.ride_id }, 'Supabase error saving ride to database');
-      throw error;
-    }
-    
-    logger.info({ ride_id: rideData.ride_id }, 'Ride saved to database successfully');
+    if (error) throw error;
     return data;
   } catch (error) {
-    logger.error({ error, ride_id: rideData.ride_id }, 'Error saving ride to database');
-    throw error; // Re-throw so caller can handle it
+    logger.error({ error }, 'Error saving ride to database');
+    return null;
   }
 }
 
@@ -269,36 +195,16 @@ export async function updateRideStatus(rideId: string, status: string, additiona
       ...additionalData
     };
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('rides')
       .update(updateData)
-      .eq('id', rideId)
-      .select();
+      .eq('id', rideId);
 
-    if (error) {
-      logger.error({ 
-        error, 
-        ride_id: rideId, 
-        status, 
-        additionalData,
-        error_message: error.message,
-        error_details: error.details,
-        error_hint: error.hint
-      }, 'Supabase error updating ride status');
-      throw error;
-    }
-    
-    // Check if any rows were actually updated
-    if (!data || data.length === 0) {
-      logger.error({ rideId, status }, 'No ride found with this ID to update');
-      throw new Error(`Ride ${rideId} not found in database`);
-    }
-    
-    logger.info({ rideId, status }, 'Ride status updated successfully in database');
+    if (error) throw error;
     return true;
   } catch (error) {
-    logger.error({ error, rideId, status }, 'Error updating ride status');
-    throw error; // Re-throw so caller can handle it
+    logger.error({ error }, 'Error updating ride status');
+    return false;
   }
 }
 
@@ -476,26 +382,24 @@ export function calculateFare(distance: number, duration: number): number {
   return Math.max(fare, env.fare.minimumFare);
 }
 
-export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm, vehicleType: string | null = null): Promise<NearbyDriverInfo[]> {
+export async function findNearbyDrivers(lat: number, lng: number, radiusKm: number = env.ride.defaultRadiusKm): Promise<NearbyDriverInfo[]> {
   try {
-    // Use database function to get nearby online and available drivers with vehicle type filter
+    // Use database function to get nearby online and available drivers
     const { data: nearbyDriversData, error } = await supabase.rpc('get_nearby_drivers', {
       lat: lat,
       lng: lng,
-      radius_km: radiusKm,
-      desired_vehicle: vehicleType // Pass vehicle type filter to database function
+      radius_km: radiusKm
     });
 
     if (error) {
-      logger.error({ error, vehicleType }, 'Error fetching nearby drivers from database');
+      logger.error({ error }, 'Error fetching nearby drivers from database');
       // Fallback to in-memory search
-      return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
+      return findNearbyDriversInMemory(lat, lng, radiusKm);
     }
 
     if (!nearbyDriversData || nearbyDriversData.length === 0) {
-      // Important: DB may be stale or empty during cold starts - fallback to in-memory drivers
-      logger.warn({ lat, lng, radiusKm, vehicleType }, 'No nearby drivers found in DB, falling back to in-memory search');
-      return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
+      logger.info({ lat, lng, radiusKm }, 'No nearby drivers found in database');
+      return [];
     }
 
     // Transform database results to NearbyDriverInfo format
@@ -503,50 +407,28 @@ export async function findNearbyDrivers(lat: number, lng: number, radiusKm: numb
       driver_id: driver.id,
       distance: driver.distance_km,
       rating: driver.rating || 4.5,
-      vehicle_type: driver.vehicle_type || driver.vehicle_model || 'Vehicle',
+      vehicle_type: `${driver.vehicle_make || ''} ${driver.vehicle_model || driver.vehicle_type || 'Vehicle'}`.trim(),
       name: driver.name || 'Driver',
       phone: driver.phone || '',
-      vehicle_number: driver.vehicle_number || 'Unknown'
+      vehicle_number: driver.vehicle_plate || driver.vehicle_number || 'Unknown'
     }));
 
-    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm, vehicleType }, 'Found nearby drivers from database with vehicle filter');
+    logger.info({ count: nearbyDrivers.length, lat, lng, radiusKm }, 'Found nearby drivers from database');
     return nearbyDrivers;
 
   } catch (error) {
     logger.error({ error }, 'Error in findNearbyDrivers');
     // Fallback to in-memory search
-    return findNearbyDriversInMemory(lat, lng, radiusKm, vehicleType);
+    return findNearbyDriversInMemory(lat, lng, radiusKm);
   }
 }
 
-// Fallback in-memory search function with vehicle type filtering
-function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number, vehicleType: string | null = null): NearbyDriverInfo[] {
+// Fallback in-memory search function
+function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number): NearbyDriverInfo[] {
   const nearbyDrivers: NearbyDriverInfo[] = [];
   
   activeDrivers.forEach((driver, driverId) => {
     if (driver.isOnline && driver.isAvailable) {
-      // Apply vehicle type filter if specified
-      if (vehicleType) {
-        const driverVehicleType = (driver.vehicle_type || '').toLowerCase().trim();
-        const requestedType = vehicleType.toLowerCase().trim();
-        
-        // Handle car/sedan synonyms
-        const isCarMatch = (requestedType === 'car' || requestedType === 'sedan') && 
-                          (driverVehicleType === 'car' || driverVehicleType === 'sedan');
-        
-        // Handle bike/motorcycle variants
-        const isBikeMatch = (requestedType === 'bike' || requestedType === 'motorcycle') && 
-                           (driverVehicleType === 'bike' || driverVehicleType === 'motorcycle' || driverVehicleType === 'motorbike');
-        
-        // Exact match for other types (SUV, etc.)
-        const isExactMatch = driverVehicleType === requestedType;
-        
-        // Skip if no match
-        if (!isCarMatch && !isBikeMatch && !isExactMatch) {
-          return;
-        }
-      }
-      
       const distance = getDistance(
         { latitude: lat, longitude: lng },
         { latitude: driver.latitude, longitude: driver.longitude }
@@ -571,8 +453,7 @@ function findNearbyDriversInMemory(lat: number, lng: number, radiusKm: number, v
 }
 
 export function generateRideId(): string {
-  // Must be a UUID to satisfy DB schema (rides.id is uuid)
-  return uuidv4();
+  return `ride_${Date.now()}_${uuidv4().substring(0, 8)}`;
 }
 
 export function validateRideData(rideData: any): void {
@@ -611,43 +492,6 @@ export function registerDriverHandlers(
         socket.emit('error', { message: 'Invalid driver data' });
         return;
       }
-      
-      // Check if driver is already connected (reconnection scenario)
-      const existingDriver = activeDrivers.get(validatedData.driver_id);
-      if (existingDriver) {
-        logger.info({ 
-          driver_id: validatedData.driver_id,
-          old_socket: existingDriver.socketId,
-          new_socket: socket.id
-        }, 'Driver reconnecting - updating socket ID');
-        
-        // Update existing driver with new socket ID
-        existingDriver.socketId = socket.id;
-        existingDriver.isOnline = true;
-        existingDriver.isAvailable = true;
-        existingDriver.latitude = validatedData.latitude;
-        existingDriver.longitude = validatedData.longitude;
-        existingDriver.lastLocationUpdate = new Date().toISOString();
-        
-        // Update session mapping
-        driverSessions.set(socket.id, validatedData.driver_id);
-        (socket as any).driverId = validatedData.driver_id;
-        
-        // Rejoin socket rooms
-        await socket.join(`driver_${validatedData.driver_id}`);
-        await socket.join('available_drivers');
-        await socket.join('online_drivers');
-        
-        // Send immediate reconnection confirmation
-        socket.emit('driver_connected', {
-          status: 'reconnected',
-          message: 'Successfully reconnected to TourTaxi',
-          driver_id: validatedData.driver_id,
-          timestamp: new Date().toISOString()
-        });
-        
-        return; // Skip creating new driver object
-      }
 
       // Store driver information in memory FIRST
       const driverInfo: Driver = {
@@ -676,43 +520,9 @@ export function registerDriverHandlers(
       driverSessions.set(socket.id, validatedData.driver_id);
       (socket as any).driverId = validatedData.driver_id;
 
-      // Join driver to necessary socket rooms synchronously
-      await socket.join(`driver_${validatedData.driver_id}`);
-      await socket.join('available_drivers'); // Room for all available drivers
-      await socket.join('online_drivers'); // Additional backup room
-      
-      // Verify room membership for debugging
-      const rooms = Array.from(socket.rooms);
-      logger.info({ 
-        driver_id: validatedData.driver_id, 
-        socket_id: socket.id,
-        rooms: rooms,
-        total_rooms: rooms.length,
-        joined_rooms: {
-          driver_specific: `driver_${validatedData.driver_id}`,
-          available_drivers: 'available_drivers',
-          online_drivers: 'online_drivers'
-        }
-      }, 'Driver joined socket rooms successfully');
-      
-      // Confirm driver is in activeDrivers map and verify room membership
-      const isInAvailableRoom = socket.rooms.has('available_drivers');
-      const isInDriverRoom = socket.rooms.has(`driver_${validatedData.driver_id}`);
-      
-      logger.info({ 
-        driver_id: validatedData.driver_id,
-        in_memory: activeDrivers.has(validatedData.driver_id),
-        is_online: driverInfo.isOnline,
-        is_available: driverInfo.isAvailable,
-        latitude: driverInfo.latitude,
-        longitude: driverInfo.longitude,
-        room_membership: {
-          available_drivers: isInAvailableRoom,
-          driver_specific: isInDriverRoom,
-          total_rooms: socket.rooms.size,
-          all_rooms: Array.from(socket.rooms)
-        }
-      }, 'Driver status and room membership confirmed');
+      // Join driver to necessary socket rooms
+      socket.join(`driver_${validatedData.driver_id}`);
+      socket.join('available_drivers'); // Room for all available drivers
       
       // Save driver to database (asynchronously, don't block connection)
       saveDriverToDatabase(driverInfo).catch(error => {
@@ -741,18 +551,6 @@ export function registerDriverHandlers(
         timestamp: new Date().toISOString()
       });
 
-      // Start keep-alive ping for this driver
-      const keepAlivePing = setInterval(() => {
-        if (socket.connected && activeDrivers.has(validatedData.driver_id)) {
-          socket.emit('server_ping', { timestamp: new Date().toISOString() });
-        } else {
-          clearInterval(keepAlivePing);
-        }
-      }, 45000); // Every 45 seconds
-      
-      // Store the interval ID for cleanup
-      (socket as any).keepAlivePing = keepAlivePing;
-
       logger.info({ driver_id: validatedData.driver_id }, 'Driver connected successfully');
       
     } catch (error) {
@@ -769,37 +567,15 @@ export function registerDriverHandlers(
     try {
       const driverId = (socket as any).driverId;
       if (!driverId || !activeDrivers.has(driverId)) {
-        logger.warn({ 
-          socket_id: socket.id, 
-          driver_id: driverId,
-          has_driver: activeDrivers.has(driverId)
-        }, 'Location update from unknown or disconnected driver');
         return;
       }
 
       const driver = activeDrivers.get(driverId)!;
       
-      // Verify socket connection is still valid
-      if (driver.socketId !== socket.id) {
-        logger.warn({ 
-          driver_id: driverId,
-          expected_socket: driver.socketId,
-          actual_socket: socket.id
-        }, 'Socket ID mismatch - updating driver socket ID');
-        driver.socketId = socket.id;
-      }
-      
-      // Update driver location and connection status
+      // Update driver location
       driver.latitude = data.latitude;
       driver.longitude = data.longitude;
       driver.lastLocationUpdate = new Date().toISOString();
-      driver.isOnline = true; // Confirm driver is online when receiving location updates
-      
-      // If driver was marked as unavailable due to stale connection, make them available again
-      if (!driver.isAvailable && !driver.currentRide) {
-        driver.isAvailable = true;
-        logger.info({ driver_id: driverId }, 'Driver reconnected - marked as available');
-      }
 
       // Update location in database
       await updateDriverLocation(driverId, data.latitude, data.longitude);
@@ -845,27 +621,24 @@ export function registerDriverHandlers(
   
   socket.on('ride_accept', async (data) => {
     try {
-      logger.info({ driver_id: data.driver_id, ride_id: data.ride_id, driver_details: data }, 'Driver accepting ride with full details');
+      logger.info({ driver_id: data.driver_id, ride_id: data.ride_id }, 'Driver accepting ride');
       
       const driverId = data.driver_id;
       const rideId = data.ride_id;
       
       // Validate driver and ride
       if (!activeDrivers.has(driverId)) {
-        logger.error({ driverId }, 'Driver not found in activeDrivers map');
         socket.emit('error', { message: 'Driver not found' });
         return;
       }
       
       const ride = pendingRides.get(rideId);
       if (!ride) {
-        logger.error({ rideId, pendingRidesSize: pendingRides.size }, 'Ride not found in pendingRides map');
         socket.emit('error', { message: 'Ride not found or expired' });
         return;
       }
       
       if (ride.status !== 'requested') {
-        logger.error({ rideId, currentStatus: ride.status }, 'Ride already processed');
         socket.emit('error', { message: 'Ride already processed' });
         return;
       }
@@ -898,64 +671,21 @@ export function registerDriverHandlers(
       driver.currentRide = rideId;
       
       // Remove driver from available_drivers room since they're now busy
-      await socket.leave('available_drivers');
+      socket.leave('available_drivers');
 
       // Store ride assignment
       rideAssignments.set(rideId, driverId);
 
       // Update ride status in database
-      logger.info({ 
-        ride_id: rideId, 
+      await updateRideStatus(rideId, 'accepted', {
         driver_id: driverId,
-        update_data: {
-          driver_latitude: driver.latitude,
-          driver_longitude: driver.longitude,
-          accepted_at: ride.accepted_at
-        }
-      }, 'Attempting to update ride in database');
-      
-      try {
-        await updateRideStatus(rideId, 'accepted', {
-          driver_id: driverId,
-          accepted_at: ride.accepted_at,
-          driver_latitude: driver.latitude,
-          driver_longitude: driver.longitude,
-          driver_to_pickup_polyline: ride.driver_to_pickup_polyline,
-          driver_to_pickup_distance: ride.driver_to_pickup_distance,
-          driver_to_pickup_duration: ride.driver_to_pickup_duration
-        });
-        logger.info({ rideId, driverId }, 'Database updated successfully');
-
-        // Issue OTP for this ride
-        const otp = generateOtp();
-        rideOtps.set(rideId, otp);
-        try {
-          await supabase.from('rides').update({ trip_otp: otp }).eq('id', rideId);
-        } catch (e) {
-          logger.warn({ e, rideId }, 'Failed to persist OTP to rides table (column may not exist)');
-        }
-        // Log OTP issued event
-        await supabase.from('ride_events').insert({
-          ride_id: rideId,
-          actor: 'system',
-          event_type: 'ride:otp_issued',
-          payload: { otp, driver_id: driverId },
-          created_at: new Date().toISOString(),
-        });
-      } catch (dbError) {
-        logger.error({ dbError, rideId, driverId }, 'Failed to update ride in database');
-        
-        // Rollback in-memory state
-        ride.status = 'requested';
-        ride.driver_id = null;
-        driver.isAvailable = true;
-        driver.currentRide = null;
-        rideAssignments.delete(rideId);
-        socket.join('available_drivers');
-        
-        socket.emit('error', { message: 'Failed to accept ride in database' });
-        return;
-      }
+        accepted_at: ride.accepted_at,
+        driver_latitude: driver.latitude,
+        driver_longitude: driver.longitude,
+        driver_to_pickup_polyline: ride.driver_to_pickup_polyline,
+        driver_to_pickup_distance: ride.driver_to_pickup_distance,
+        driver_to_pickup_duration: ride.driver_to_pickup_duration
+      });
 
       // Join both driver and passenger to a per-ride room
       const rideRoom = `ride_${rideId}`;
@@ -988,16 +718,6 @@ export function registerDriverHandlers(
       
       io.to(rideRoom).emit('ride_accepted', acceptedPayload);
       io.to(rideRoom).emit('ride_room_joined', { ride_id: rideId, members: 2 });
-      // Send OTP to passenger app via socket as well (in addition to DB event)
-      const otpSocket = rideOtps.get(rideId);
-      if (otpSocket) {
-        io.to(rideRoom).emit('ride_otp', { ride_id: rideId, otp: otpSocket, timestamp: new Date().toISOString() });
-      }
-
-      // Also broadcast globally to ensure passenger receives event even if not in room yet
-      io.emit('ride_accepted', { ...acceptedPayload, is_global_broadcast: true });
-      // Legacy compatibility event name
-      io.emit('ride_accept', { ...acceptedPayload, is_global_broadcast: true });
 
       // Notify driver of successful acceptance
       socket.emit('ride_accepted_confirmation', {
@@ -1043,7 +763,7 @@ export function registerDriverHandlers(
         )).filter(driverInfo => driverInfo.driver_id !== driverId);
 
         let requestsSent = 0;
-        for (const driverInfo of nearbyDrivers) {
+        nearbyDrivers.forEach(driverInfo => {
           const driver = activeDrivers.get(driverInfo.driver_id);
           if (driver && driver.isAvailable) {
             const estimatedArrival = Math.round(driverInfo.distance * 2);
@@ -1053,31 +773,12 @@ export function registerDriverHandlers(
               driver_distance: driverInfo.distance.toFixed(2)
             };
             
-            try {
-              // Use triple approach for maximum reliability
-              io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', rideRequestPayload);
-              io.to(driver.socketId).emit('ride_request', rideRequestPayload);
-              io.to('available_drivers').emit('ride_request', {
-                ...rideRequestPayload,
-                target_driver_id: driverInfo.driver_id
-              });
-              requestsSent++;
-              
-              logger.info({
-                driver_id: driverInfo.driver_id,
-                ride_id: rideId,
-                rejection_forwarding: true
-              }, 'Ride request forwarded to alternative driver after rejection');
-              
-            } catch (error) {
-              logger.error({
-                error,
-                driver_id: driverInfo.driver_id,
-                ride_id: rideId
-              }, 'Failed to forward ride request to alternative driver');
-            }
+            // Use dual approach for reliability
+            io.to(`driver_${driverInfo.driver_id}`).emit('ride_request', rideRequestPayload);
+            io.to(driver.socketId).emit('ride_request', rideRequestPayload);
+            requestsSent++;
           }
-        };
+        });
 
         logger.info({ ride_id: rideId, requests_sent: requestsSent }, 'Ride request forwarded to other drivers');
       }
@@ -1100,7 +801,7 @@ export function registerDriverHandlers(
   // RIDE START
   // ========================================
   
-  socket.on('ride_start', async (data) => {
+  socket.on('ride_start', (data) => {
     try {
       logger.info({ driver_id: data.driver_id, ride_id: data.ride_id }, 'Driver starting ride');
       
@@ -1118,53 +819,9 @@ export function registerDriverHandlers(
         return;
       }
 
-      // Verify OTP was confirmed before starting
-      let verified = false;
-      try {
-        // Check rides.otp_verified_at first
-        const { data: rideRow } = await supabase
-          .from('rides')
-          .select('otp_verified_at')
-          .eq('id', rideId)
-          .maybeSingle();
-        if (rideRow && rideRow.otp_verified_at) {
-          verified = true;
-        } else {
-          // Fallback: look for recent ride:otp_verified event
-          const { data: ev } = await supabase
-            .from('ride_events')
-            .select('id')
-            .eq('ride_id', rideId)
-            .eq('event_type', 'ride:otp_verified')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          verified = !!ev;
-        }
-      } catch (e) {}
-
-      if (!verified) {
-        socket.emit('error', { message: 'OTP not verified yet' });
-        return;
-      }
-
       // Update ride status
       ride.status = 'started';
       ride.started_at = new Date().toISOString();
-
-      // Persist to DB
-      try {
-        await updateRideStatus(rideId, 'started', { started_at: ride.started_at });
-        await supabase.from('ride_events').insert({
-          ride_id: rideId,
-          actor: 'driver',
-          event_type: 'ride:started',
-          payload: { driver_id: driverId },
-          created_at: new Date().toISOString(),
-        });
-      } catch (e) {
-        logger.warn({ e, rideId }, 'Failed to persist ride start to DB');
-      }
 
       // Notify passenger that ride has started
       const rideRoom = `ride_${rideId}`;
@@ -1235,7 +892,7 @@ export function registerDriverHandlers(
       driver.currentRide = null;
       
       // Rejoin available_drivers room since ride is complete
-      await socket.join('available_drivers');
+      socket.join('available_drivers');
 
       // Move ride to completed rides
       completedRides.set(rideId, ride);
@@ -1359,7 +1016,7 @@ export function registerDriverHandlers(
     }
   });
 
-  socket.on('driver_available', async (data) => {
+  socket.on('driver_available', (data) => {
     try {
       const driverId = data.driver_id;
       const driver = activeDrivers.get(driverId);
@@ -1369,7 +1026,7 @@ export function registerDriverHandlers(
         driver.currentRide = null;
         
         // Join available_drivers room to receive ride requests
-        await socket.join('available_drivers');
+        socket.join('available_drivers');
         
         logger.info({ driver_id: driverId }, 'Driver is now available');
         
@@ -1382,166 +1039,6 @@ export function registerDriverHandlers(
       
     } catch (error) {
       logger.error({ error }, 'Error setting driver available');
-    }
-  });
-
-  // Driver heartbeat/ping for connection health monitoring
-  socket.on('driver_ping', async (data, ack) => {
-    try {
-      const driverId = (socket as any).driverId || data?.driver_id;
-      
-      if (driverId && activeDrivers.has(driverId)) {
-        const driver = activeDrivers.get(driverId)!;
-        driver.lastLocationUpdate = new Date().toISOString();
-        driver.isOnline = true;
-        
-        // Recovery: If driver was marked as unavailable but is now pinging us,
-        // mark them as available again if they're not on a ride
-        if (!driver.isAvailable && !driver.currentRide) {
-          driver.isAvailable = true;
-          logger.info({ driver_id: driverId }, 'Driver restored to available state via ping');
-          
-          // Make sure they're in the available_drivers room
-          if (!socket.rooms.has('available_drivers')) {
-            await socket.join('available_drivers');
-            logger.info({ driver_id: driverId }, 'Re-added driver to available_drivers room');
-          }
-          
-          // Verify they're in the driver-specific room
-          if (!socket.rooms.has(`driver_${driverId}`)) {
-            await socket.join(`driver_${driverId}`);
-            logger.info({ driver_id: driverId }, 'Re-added driver to driver-specific room');
-          }
-        }
-        
-        // Update database to ensure consistency
-        if (!driver.isOnline || !driver.isAvailable) {
-          try {
-            await supabase
-              .from('drivers')
-              .update({
-                is_online: driver.isOnline,
-                is_available: driver.isAvailable,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', driverId);
-          } catch (dbError) {
-            logger.error({ error: dbError, driver_id: driverId }, 'Failed to update driver status in database');
-          }
-        }
-        
-        // Acknowledge the ping
-        if (typeof ack === 'function') {
-          ack({ 
-            status: 'ok', 
-            timestamp: new Date().toISOString(),
-            driver_status: {
-              isOnline: driver.isOnline,
-              isAvailable: driver.isAvailable,
-              currentRide: driver.currentRide,
-              recovery_performed: !driver.isAvailable
-            }
-          });
-        }
-        
-        logger.debug({ driver_id: driverId }, 'Driver ping received');
-      } else if (driverId) {
-        // Driver has a driver_id but not in activeDrivers - could be a stale session
-        // Try to recover from database
-        try {
-          const { data: driverData } = await supabase
-            .from('drivers')
-            .select('*')
-            .eq('id', driverId)
-            .single();
-          
-          if (driverData) {
-            logger.warn({ 
-              driver_id: driverId, 
-              socket_id: socket.id 
-            }, 'Driver not in memory but found in database - recovering');
-            
-            // Create a new driver object for this driver
-            const recoveredDriver: Driver = {
-              socketId: socket.id,
-              driver_id: driverId,
-              name: driverData.name || 'Driver',
-              phone: driverData.phone || '',
-              vehicle_type: driverData.vehicle_type || 'Sedan',
-              vehicle_number: driverData.vehicle_number || '',
-              rating: driverData.rating || 4.5,
-              latitude: driverData.current_latitude || 0,
-              longitude: driverData.current_longitude || 0,
-              isOnline: true,
-              isAvailable: true,
-              currentRide: null,
-              totalRides: driverData.total_rides || 0,
-              totalEarnings: driverData.total_earnings || 0,
-              lastLocationUpdate: new Date().toISOString(),
-              connectedAt: new Date().toISOString()
-            };
-            
-            activeDrivers.set(driverId, recoveredDriver);
-            driverSessions.set(socket.id, driverId);
-            (socket as any).driverId = driverId;
-            
-            // Add to socket rooms
-            await socket.join(`driver_${driverId}`);
-            await socket.join('available_drivers');
-            await socket.join('online_drivers');
-            
-            // Update database
-            await supabase
-              .from('drivers')
-              .update({
-                is_online: true,
-                is_available: true,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', driverId);
-            
-            if (typeof ack === 'function') {
-              ack({ 
-                status: 'recovered', 
-                timestamp: new Date().toISOString(),
-                message: 'Driver session recovered',
-                driver_status: {
-                  isOnline: true,
-                  isAvailable: true,
-                  currentRide: null
-                }
-              });
-            }
-            return;
-          }
-        } catch (dbError) {
-          logger.error({ error: dbError, driver_id: driverId }, 'Failed to recover driver from database');
-        }
-        
-        logger.warn({ 
-          driver_id: driverId, 
-          socket_id: socket.id 
-        }, 'Ping from unknown driver - not in memory or database');
-        
-        if (typeof ack === 'function') {
-          ack({ 
-            status: 'error', 
-            message: 'Driver not found - please reconnect',
-            needs_reconnect: true
-          });
-        }
-      } else {
-        logger.warn({ socket_id: socket.id }, 'Ping with no driver ID');
-        
-        if (typeof ack === 'function') {
-          ack({ status: 'error', message: 'No driver ID provided' });
-        }
-      }
-    } catch (error) {
-      logger.error({ error }, 'Error handling driver ping');
-      if (typeof ack === 'function') {
-        ack({ status: 'error', message: 'Server error' });
-      }
     }
   });
 }
@@ -1567,94 +1064,13 @@ cron.schedule('0 * * * *', () => {
   }
 });
 
-// Aggressive connection monitoring and recovery every 1 minute
-cron.schedule('*/1 * * * *', async () => {
-  const now = new Date();
-  const staleThreshold = 2 * 60 * 1000; // Reduced to 2 minutes for faster detection
-  const disconnectedThreshold = 30 * 1000; // 30 seconds for disconnected status
-  let cleanedDrivers = 0;
-  let recoveredDrivers = 0;
-  
-  // Check for stale driver connections and attempt recovery
-  for (const [driverId, driver] of activeDrivers) {
-    try {
-      const lastUpdate = new Date(driver.lastLocationUpdate || driver.connectedAt);
-      const timeDiff = now.getTime() - lastUpdate.getTime();
-      
-      if (timeDiff > staleThreshold) {
-        // Driver connection is stale, mark as offline but keep in memory for recovery
-        if (driver.isOnline) {
-          logger.warn({ 
-            driver_id: driverId, 
-            last_update: driver.lastLocationUpdate,
-            time_diff_minutes: Math.round(timeDiff / 60000)
-          }, 'Driver connection stale - marking offline but keeping for recovery');
-          
-          // Mark as offline in memory but don't remove
-          driver.isOnline = false;
-          driver.isAvailable = false;
-          
-          // Update database to reflect offline status
-          await supabase
-            .from('drivers')
-            .update({
-              is_online: false,
-              is_available: false,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', driverId);
-            
-          // Update active_drivers table
-          await supabase.rpc('update_driver_online_status', {
-            available_status: false,
-            driver_id: driverId,
-            online_status: false
-          });
-          
-          cleanedDrivers++;
-        }
-      } else if (timeDiff < disconnectedThreshold && !driver.isOnline) {
-        // Driver has recent activity but is marked offline - recover them
-        logger.info({ 
-          driver_id: driverId,
-          last_update: driver.lastLocationUpdate
-        }, 'Auto-recovering driver with recent activity');
-        
-        driver.isOnline = true;
-        driver.isAvailable = true;
-        
-        // Update database
-        await supabase
-          .from('drivers')
-          .update({
-            is_online: true,
-            is_available: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', driverId);
-          
-        await supabase.rpc('update_driver_online_status', {
-          available_status: true,
-          driver_id: driverId,
-          online_status: true
-        });
-        
-        recoveredDrivers++;
-      }
-    } catch (error) {
-      logger.error({ error, driver_id: driverId }, 'Error in driver status monitoring');
-    }
-  }
-  
+// Update driver statistics every 5 minutes
+cron.schedule('*/5 * * * *', () => {
   logger.info({
     active_drivers: activeDrivers.size,
     pending_rides: pendingRides.size,
-    completed_rides: completedRides.size,
-    cleaned_stale_drivers: cleanedDrivers,
-    recovered_drivers: recoveredDrivers,
-    online_drivers: Array.from(activeDrivers.values()).filter(d => d.isOnline).length,
-    available_drivers: Array.from(activeDrivers.values()).filter(d => d.isAvailable).length
-  }, 'Enhanced system status with recovery stats');
+    completed_rides: completedRides.size
+  }, 'System status update');
 });
 
 // ========================================
