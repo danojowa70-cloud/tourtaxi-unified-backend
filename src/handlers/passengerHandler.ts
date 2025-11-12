@@ -58,22 +58,42 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       return true; // Success - passenger exists
     }
 
-    // Passenger doesn't exist, insert new record
-    // Use provided email or generate default if not provided (since email is required)
+    // Passenger doesn't exist by ID, need to create new record
+    // Handle email carefully to avoid unique constraint violations
     let passengerEmail: string;
+    
     if (email) {
-      passengerEmail = email;
-      logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Using real email provided by passenger app');
+      // Check if this email is already taken by another passenger
+      const { data: emailCheck } = await supabase
+        .from('passengers')
+        .select('id, email')
+        .eq('email', email)
+        .single();
+      
+      if (emailCheck && emailCheck.id !== passengerId) {
+        // Email is taken by another user - generate unique email
+        passengerEmail = `${passengerId}@passenger.tourtaxi.app`;
+        logger.warn({ 
+          passenger_id: passengerId, 
+          requested_email: email,
+          fallback_email: passengerEmail,
+          existing_user: emailCheck.id
+        }, 'Email already taken by another user, using UUID-based email');
+      } else {
+        // Email is available or belongs to this user
+        passengerEmail = email;
+        logger.info({ passenger_id: passengerId, email: passengerEmail }, 'Using email provided by passenger app');
+      }
     } else {
+      // No email provided - use UUID-based email
       passengerEmail = `${passengerId}@passenger.tourtaxi.app`;
       logger.warn({ 
         passenger_id: passengerId, 
         fallback_email: passengerEmail 
-      }, 'WARNING: No email provided by passenger app, using fallback email. Passenger app should send real email!');
+      }, 'No email provided, using UUID-based email');
     }
     
-    // Use upsert instead of insert to handle both new and existing passengers
-    // This will insert if passenger doesn't exist, or update if they do
+    // Now upsert with the safe email
     const { error: upsertError } = await supabase
       .from('passengers')
       .upsert({
