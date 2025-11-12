@@ -585,7 +585,7 @@ export function registerDriverHandlers(
       // Set up keep-alive ping to maintain connection
       const keepAlivePing = setInterval(() => {
         if (socket.connected) {
-          socket.emit('ping', { timestamp: new Date().toISOString() });
+          socket.emit('server_ping', { timestamp: new Date().toISOString() });
           logger.debug({ driver_id: validatedData.driver_id }, 'Sent keep-alive ping to driver');
         } else {
           clearInterval(keepAlivePing);
