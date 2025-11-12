@@ -31,6 +31,37 @@ import {
 export const activePassengers = new Map<string, Passenger>();
 export const passengerSessions = new Map<string, string>(); // socket_id -> passenger_id
 
+// Helper to ensure passenger exists in database
+async function ensurePassengerExists(passengerId: string, name?: string, phone?: string): Promise<void> {
+  try {
+    const { default: supabase } = await import('../config/supabase');
+    
+    // Try to upsert passenger (insert if not exists, update if exists)
+    const { error } = await supabase
+      .from('passengers')
+      .upsert({
+        id: passengerId,
+        name: name || 'Passenger',
+        phone: phone || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id',
+        ignoreDuplicates: false
+      });
+
+    if (error) {
+      logger.error({ error, passenger_id: passengerId }, 'Failed to ensure passenger exists in database');
+      throw error;
+    }
+    
+    logger.info({ passenger_id: passengerId }, 'Passenger record ensured in database');
+  } catch (e) {
+    logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
+    throw e;
+  }
+}
+
 // Helper to log passenger events into Supabase ride_events
 async function logPassengerEvent(
   type: 'passenger:connected' | 'passenger:disconnected' | 'ride:requested' | 'ride:cancelled',
@@ -195,6 +226,30 @@ export function registerPassengerHandlers(
 
       // Store the ride
       pendingRides.set(rideId, ride);
+
+      // Ensure passenger exists in database before creating ride
+      try {
+        await ensurePassengerExists(
+          validatedRideData.passenger_id,
+          validatedRideData.passenger_name,
+          validatedRideData.passenger_phone
+        );
+      } catch (passengerError) {
+        logger.error({ error: passengerError, ride_id: rideId }, 'Failed to ensure passenger exists in database');
+        
+        // Remove from in-memory store since passenger creation failed
+        pendingRides.delete(rideId);
+        
+        // Notify passenger of failure
+        socket.emit('ride_request_failed', {
+          ride_id: rideId,
+          message: 'Failed to create passenger record. Please try again.',
+          error: 'PASSENGER_CREATION_ERROR',
+          timestamp: new Date().toISOString()
+        });
+        
+        return; // Stop processing
+      }
 
       // Log ride request event with location
       await logPassengerEvent('ride:requested', {
