@@ -32,11 +32,11 @@ export const activePassengers = new Map<string, Passenger>();
 export const passengerSessions = new Map<string, string>(); // socket_id -> passenger_id
 
 // Helper to ensure passenger exists in database
-async function ensurePassengerExists(passengerId: string, name?: string, phone?: string, email?: string): Promise<void> {
+async function ensurePassengerExists(passengerId: string, name?: string, phone?: string, email?: string): Promise<boolean> {
   try {
     const { default: supabase } = await import('../config/supabase');
     
-    // First, check if passenger already exists
+    // First, check if passenger already exists by ID
     const { data: existingPassenger, error: fetchError } = await supabase
       .from('passengers')
       .select('id, email, name')
@@ -48,14 +48,14 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       throw fetchError;
     }
 
-    // If passenger exists, don't overwrite their data
+    // If passenger exists by ID, we're good
     if (existingPassenger) {
       logger.info({ 
         passenger_id: passengerId, 
         existing_email: existingPassenger.email,
         existing_name: existingPassenger.name
-      }, 'Passenger already exists in database, skipping insert');
-      return;
+      }, 'Passenger already exists in database (found by ID)');
+      return true; // Success - passenger exists
     }
 
     // Passenger doesn't exist, insert new record
@@ -84,15 +84,28 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
       });
 
     if (insertError) {
-      // Handle duplicate email error (code 23505) - this is OK, passenger exists
+      // Handle duplicate email error (code 23505)
       if (insertError.code === '23505') {
-        logger.info({ 
+        logger.warn({ 
           passenger_id: passengerId, 
           email: passengerEmail,
           error_code: insertError.code
-        }, 'Passenger with this email already exists (duplicate key), continuing with ride request');
-        // Don't throw error, just return - passenger can still make ride requests
-        return;
+        }, 'Duplicate email detected - checking if passenger exists by ID');
+        
+        // Verify the passenger actually exists in database by ID
+        const { data: verifyPassenger } = await supabase
+          .from('passengers')
+          .select('id')
+          .eq('id', passengerId)
+          .single();
+        
+        if (verifyPassenger) {
+          logger.info({ passenger_id: passengerId }, 'Passenger exists in database (verified after duplicate email)');
+          return true; // Success - passenger exists
+        } else {
+          logger.error({ passenger_id: passengerId }, 'Passenger does NOT exist despite duplicate email error');
+          throw new Error('Passenger record inconsistency - cannot create ride');
+        }
       }
       
       // For other errors, log and throw
@@ -101,14 +114,32 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
     }
     
     logger.info({ passenger_id: passengerId, email: passengerEmail }, 'New passenger record created in database');
+    return true; // Success - passenger created
   } catch (e: any) {
     // Handle duplicate email error at catch level too
     if (e.code === '23505') {
-      logger.info({ 
+      logger.warn({ 
         passenger_id: passengerId,
         error_code: e.code
-      }, 'Caught duplicate key error, passenger exists, continuing');
-      return; // Don't throw, allow ride request to continue
+      }, 'Caught duplicate key error at top level - verifying passenger exists');
+      
+      // Verify the passenger actually exists
+      try {
+        const { data: verifyPassenger } = await supabase
+          .from('passengers')
+          .select('id')
+          .eq('id', passengerId)
+          .single();
+        
+        if (verifyPassenger) {
+          logger.info({ passenger_id: passengerId }, 'Passenger verified to exist');
+          return true; // Success
+        }
+      } catch (verifyError) {
+        logger.error({ error: verifyError, passenger_id: passengerId }, 'Failed to verify passenger existence');
+      }
+      
+      throw new Error('Passenger record inconsistency');
     }
     
     logger.error({ e, passenger_id: passengerId }, 'Error ensuring passenger exists');
@@ -281,14 +312,21 @@ export function registerPassengerHandlers(
       // Store the ride
       pendingRides.set(rideId, ride);
 
-      // Ensure passenger exists in database before creating ride
+
+      // Ensure passenger exists in database BEFORE saving ride (foreign key constraint)
       try {
-        await ensurePassengerExists(
+        const passengerExists = await ensurePassengerExists(
           validatedRideData.passenger_id,
           validatedRideData.passenger_name,
           validatedRideData.passenger_phone,
           validatedRideData.passenger_email
         );
+        
+        if (!passengerExists) {
+          throw new Error('Failed to create or verify passenger record');
+        }
+        
+        logger.info({ passenger_id: validatedRideData.passenger_id }, 'Passenger verified to exist in database');
       } catch (passengerError) {
         logger.error({ error: passengerError, ride_id: rideId }, 'Failed to ensure passenger exists in database');
         
