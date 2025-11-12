@@ -36,6 +36,9 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
   try {
     const { default: supabase } = await import('../config/supabase');
     
+    // Generate default email if not provided (since email is required)
+    const email = `${passengerId}@passenger.tourtaxi.app`;
+    
     // Try to upsert passenger (insert if not exists, update if exists)
     const { error } = await supabase
       .from('passengers')
@@ -43,6 +46,7 @@ async function ensurePassengerExists(passengerId: string, name?: string, phone?:
         id: passengerId,
         name: name || 'Passenger',
         phone: phone || '',
+        email: email,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {
