@@ -564,13 +564,36 @@ export function registerDriverHandlers(
       (socket as any).driverId = validatedData.driver_id;
 
       // Join driver to necessary socket rooms
-      socket.join(`driver_${validatedData.driver_id}`);
-      socket.join('available_drivers'); // Room for all available drivers
+      await socket.join(`driver_${validatedData.driver_id}`);
+      await socket.join('available_drivers'); // Room for all available drivers
+      
+      // Log room membership for debugging
+      const rooms = Array.from(socket.rooms);
+      logger.info({ 
+        driver_id: validatedData.driver_id, 
+        socket_id: socket.id,
+        rooms: rooms,
+        in_driver_room: rooms.includes(`driver_${validatedData.driver_id}`),
+        in_available_room: rooms.includes('available_drivers')
+      }, 'Driver joined socket rooms');
       
       // Save driver to database (asynchronously, don't block connection)
       saveDriverToDatabase(driverInfo).catch(error => {
         logger.error({ error, driver_id: validatedData.driver_id }, 'Failed to save driver to database');
       });
+      
+      // Set up keep-alive ping to maintain connection
+      const keepAlivePing = setInterval(() => {
+        if (socket.connected) {
+          socket.emit('ping', { timestamp: new Date().toISOString() });
+          logger.debug({ driver_id: validatedData.driver_id }, 'Sent keep-alive ping to driver');
+        } else {
+          clearInterval(keepAlivePing);
+        }
+      }, 25000); // Every 25 seconds
+      
+      // Store interval reference for cleanup
+      (socket as any).keepAlivePing = keepAlivePing;
 
       // Log driver online event
       await logDriverEvent('driver:online', { driver_id: validatedData.driver_id, name: validatedData.name });

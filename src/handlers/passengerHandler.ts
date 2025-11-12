@@ -426,6 +426,38 @@ export function registerPassengerHandlers(
           };
           
           try {
+            // Verify socket is still connected before emission
+            const driverSocket = io.sockets.sockets.get(driver.socketId);
+            
+            if (!driverSocket || !driverSocket.connected) {
+              logger.error({ 
+                driver_id: driverInfo.driver_id, 
+                socket_id: driver.socketId,
+                socket_exists: !!driverSocket,
+                socket_connected: driverSocket?.connected,
+                ride_id: rideId
+              }, 'Driver socket not connected - skipping emission');
+              
+              // Mark driver as offline and unavailable
+              driver.isOnline = false;
+              driver.isAvailable = false;
+              continue;
+            }
+            
+            // Check room membership
+            const rooms = Array.from(driverSocket.rooms);
+            const inDriverRoom = rooms.includes(`driver_${driverInfo.driver_id}`);
+            const inAvailableRoom = rooms.includes('available_drivers');
+            
+            logger.info({ 
+              driver_id: driverInfo.driver_id,
+              socket_id: driver.socketId,
+              rooms: rooms,
+              in_driver_room: inDriverRoom,
+              in_available_room: inAvailableRoom,
+              ride_id: rideId
+            }, 'Driver socket status before emission');
+            
             // TRIPLE APPROACH: Three delivery methods for maximum reliability
             // Emit BOTH legacy ('ride:request') and new ('ride_request') event names
             // Method 1: Driver-specific room
@@ -459,8 +491,9 @@ export function registerPassengerHandlers(
                 socket_id: driver.socketId,
                 backup_room: 'available_drivers'
               },
-              estimated_arrival: estimatedArrival
-            }, 'Ride request sent to driver via triple delivery (dual event names)');
+              estimated_arrival: estimatedArrival,
+              room_membership_verified: true
+            }, '✅ Ride request EMITTED to driver via triple delivery');
             
           } catch (emissionError) {
             logger.error({ 

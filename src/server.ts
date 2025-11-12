@@ -553,6 +553,53 @@ app.post('/driver/fcm-token', async (req: express.Request, res: express.Response
   }
 });
 
+// Debug endpoint to check driver socket connection and rooms
+app.get('/driver/:driverId/socket-status', async (req: express.Request, res: express.Response) => {
+  try {
+    const driverId = req.params.driverId;
+    const driver = activeDrivers.get(driverId);
+    
+    if (!driver) {
+      return res.status(404).json({ 
+        error: 'Driver not found in activeDrivers',
+        driver_id: driverId,
+        total_active_drivers: activeDrivers.size
+      });
+    }
+    
+    // Get the actual socket instance
+    const driverSocket = io.sockets.sockets.get(driver.socketId);
+    
+    if (!driverSocket) {
+      return res.json({
+        driver_id: driverId,
+        in_memory: true,
+        socket_connected: false,
+        socket_id: driver.socketId,
+        error: 'Socket not found - driver may have disconnected'
+      });
+    }
+    
+    const rooms = Array.from(driverSocket.rooms);
+    
+    res.json({
+      driver_id: driverId,
+      socket_id: driver.socketId,
+      socket_connected: driverSocket.connected,
+      rooms: rooms,
+      in_driver_room: rooms.includes(`driver_${driverId}`),
+      in_available_room: rooms.includes('available_drivers'),
+      is_online: driver.isOnline,
+      is_available: driver.isAvailable,
+      last_location_update: driver.lastLocationUpdate,
+      connected_at: driver.connectedAt,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to get socket status', message: error.message });
+  }
+});
+
 // Debug endpoint to check driver status in database
 app.get('/driver/:driverId/status', async (req: express.Request, res: express.Response) => {
   try {
